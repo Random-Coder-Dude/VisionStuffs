@@ -10,8 +10,8 @@ CONFIG_FILE = "vision_config.json"
 # ---------- Color detection ----------
 @dataclass
 class ColorConfig:
-    red_factor: float = 2.0
-    blue_factor: float = 1.7
+    red_factor: float = 1.0
+    blue_factor: float = 1.0
 
 # ---------- Bumper geometry ----------
 @dataclass
@@ -36,8 +36,8 @@ class MetalConfig:
 # ---------- Debug / UI ----------
 @dataclass
 class DebugConfig:
-    show_overlay: bool = True
-    show_verbose: bool = True
+    show_overlay: bool = False
+    show_verbose: bool = False
 
 # ---------- Performance ----------
 @dataclass

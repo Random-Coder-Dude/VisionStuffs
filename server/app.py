@@ -7,6 +7,7 @@ from dataclasses import asdict, fields
 from server.state import SharedState
 from vision.detector import BumperDetector
 from vision.config import DetectorConfig
+from vision.system_monitor import SystemMonitor
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,7 +20,14 @@ config = DetectorConfig()
 # Load saved configuration
 config.load()
 
+# Disable overlay by default for graph-based UI
+config.debug.show_overlay = False
+
 detector = BumperDetector(config)
+
+# Start system monitor
+system_monitor = SystemMonitor()
+system_monitor.start()
 
 # ---------------- Streaming ----------------
 def stream(processed=False):
@@ -58,6 +66,27 @@ def raw():
 def processed():
     return Response(stream(True),
         mimetype="multipart/x-mixed-replace; boundary=frame")
+
+# ---------------- Stats API ----------------
+@app.route("/api/stats", methods=["GET"])
+def get_stats():
+    """Get current performance and system stats"""
+    fps_value = detector.fps_avg.value if detector.fps_avg.value is not None else 0.0
+    
+    return jsonify({
+        "performance": {
+            "fps": round(fps_value, 1),
+            "frame_time_ms": round(detector.last_timings["total"] * 1000, 2),
+            "timings": {
+                "color_ms": round(detector.last_timings["color_masks"] * 1000, 2),
+                "metallic_ms": round(detector.last_timings["metallic"] * 1000, 2),
+                "morph_ms": round(detector.last_timings["morphology"] * 1000, 2),
+                "bbox_ms": round(detector.last_timings["bbox"] * 1000, 2),
+                "robot_ms": round(detector.last_timings["robot"] * 1000, 2)
+            }
+        },
+        "system": system_monitor.get_stats()
+    })
 
 # ---------------- Hot-reload config API ----------------
 def validate_and_set_config(config_obj, key_parts, value):
@@ -190,72 +219,199 @@ def reset_config():
     
     return jsonify({"status": "ok", "message": "Configuration reset to defaults"})
 
-# ---------------- Simple UI ----------------
+# ---------------- UI with Charts ----------------
 HTML_TEMPLATE = """
 <!doctype html>
 <html>
 <head>
-  <title>Robot Vision Tuning</title>
+  <title>Robot Vision Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body {
       background:#0b0b0b;
       color:#eee;
-      font-family:system-ui, sans-serif;
-      display:flex;
+      font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       margin:0;
       padding:0;
+      display:grid;
+      grid-template-columns: 350px 1fr 400px;
+      grid-template-rows: auto 1fr;
+      height:100vh;
+      gap:0;
     }
+    
+    /* Header */
+    #header {
+      grid-column: 1 / -1;
+      background:#1a1a1a;
+      padding:15px 20px;
+      border-bottom:2px solid #00ff88;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    #header h1 {
+      margin:0;
+      font-size:24px;
+      color:#00ff88;
+    }
+    
+    /* Left sidebar - Controls */
     #controls {
-      width:400px;
       padding:20px;
       border-right:1px solid #333;
       overflow-y:auto;
-      height:100vh;
+      background:#0f0f0f;
     }
+    
+    /* Center - Video */
     #video-container {
-      flex:1;
       display:flex;
+      flex-direction:column;
       align-items:center;
       justify-content:center;
       padding:20px;
+      background:#000;
     }
-    h2 { margin-top:0; color:#8fd; }
-    h3 { color:#8fd; margin-top:20px; margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px; }
-    .group { margin-bottom:15px; }
-    label { font-size:14px; display:block; margin-bottom:3px; }
-    input[type=range] { width:100%; }
-    input[type=number], input[type=text] { width:100%; padding:5px; background:#1a1a1a; color:#eee; border:1px solid #333; }
-    input[type=checkbox] { margin-right:5px; }
-    .value { float:right; color:#8fd; font-weight:bold; }
-    img { max-width:100%; border:2px solid #333; }
-    button { 
-      padding:8px 15px; 
-      background:#1a5f7a; 
-      color:#fff; 
-      border:none; 
-      cursor:pointer; 
+    #video-container img {
+      max-width:100%;
+      max-height:calc(100vh - 200px);
+      border:2px solid #333;
       border-radius:4px;
-      margin-right:10px;
+    }
+    
+    /* Right sidebar - Graphs */
+    #graphs {
+      padding:20px;
+      border-left:1px solid #333;
+      overflow-y:auto;
+      background:#0f0f0f;
+    }
+    
+    /* Chart containers */
+    .chart-container {
+      margin-bottom:25px;
+      background:#1a1a1a;
+      padding:15px;
+      border-radius:8px;
+      border:1px solid #333;
+    }
+    .chart-title {
+      color:#00ff88;
+      font-size:14px;
+      font-weight:600;
+      margin-bottom:10px;
+      text-transform:uppercase;
+      letter-spacing:0.5px;
+    }
+    canvas {
+      max-height:180px !important;
+    }
+    
+    /* Controls styling */
+    h3 {
+      color:#00ff88;
+      margin:20px 0 10px 0;
+      font-size:14px;
+      text-transform:uppercase;
+      border-bottom:1px solid #333;
+      padding-bottom:8px;
+      letter-spacing:0.5px;
+    }
+    .group { margin-bottom:15px; }
+    label {
+      font-size:13px;
+      display:block;
+      margin-bottom:5px;
+      color:#ccc;
+    }
+    input[type=range] {
+      width:100%;
+      height:4px;
+      background:#333;
+      outline:none;
+      border-radius:2px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      width:14px;
+      height:14px;
+      background:#00ff88;
+      cursor:pointer;
+      border-radius:50%;
+    }
+    input[type=number], input[type=text] {
+      width:100%;
+      padding:8px;
+      background:#1a1a1a;
+      color:#eee;
+      border:1px solid #333;
+      border-radius:4px;
+      font-size:13px;
+    }
+    input[type=checkbox] {
+      margin-right:8px;
+      width:16px;
+      height:16px;
+    }
+    .value {
+      float:right;
+      color:#00ff88;
+      font-weight:600;
+      font-size:13px;
+    }
+    button {
+      padding:10px 16px;
+      background:#1a5f7a;
+      color:#fff;
+      border:none;
+      cursor:pointer;
+      border-radius:4px;
+      font-size:13px;
+      font-weight:600;
+      transition:background 0.2s;
     }
     button:hover { background:#2a7f9a; }
-    button.danger { background:#7a1a1a; }
-    button.danger:hover { background:#9a2a2a; }
     .button-group { margin-top:20px; }
-    .status { 
-      padding:10px; 
-      margin-top:10px; 
-      border-radius:4px; 
+    .status {
+      padding:10px;
+      margin-top:10px;
+      border-radius:4px;
       background:#1a3a1a;
       color:#8f8;
       display:none;
+      font-size:13px;
+    }
+    
+    /* Stats boxes */
+    .stat-box {
+      display:flex;
+      justify-content:space-between;
+      padding:10px;
+      background:#1a1a1a;
+      border-radius:4px;
+      margin-bottom:8px;
+      border-left:3px solid #00ff88;
+    }
+    .stat-label {
+      color:#999;
+      font-size:12px;
+    }
+    .stat-value {
+      color:#00ff88;
+      font-weight:600;
+      font-size:14px;
     }
   </style>
 </head>
 <body>
 
-<div id="controls">
-  <h2>🤖 Vision Tuning</h2>
+<div id="header">
+  <h1>🤖 Vision Dashboard</h1>
+  <div style="color:#999; font-size:14px;">Real-time Robot Detection</div>
+</div>
 
+<div id="controls">
   <h3>Color Detection</h3>
   <div class="group">
     <label>Red Factor <span id="rf" class="value">2.0</span></label>
@@ -277,7 +433,7 @@ HTML_TEMPLATE = """
     <input type="range" min="0" max="1" step="0.05" value="0.7"
       oninput="set('metal.spread_weight', this.value, 'sw')">
 
-    <label>Search Height Multiplier <span id="sh" class="value">1.0</span></label>
+    <label>Search Height <span id="sh" class="value">1.0</span></label>
     <input type="range" min="0.5" max="2" step="0.1" value="1.0"
       oninput="set('metal.search_height_multiplier', this.value, 'sh')">
   </div>
@@ -299,72 +455,229 @@ HTML_TEMPLATE = """
     <input type="range" min="100" max="5000" step="100" value="1000"
       oninput="set('bumper.min_area', this.value, 'ba')">
 
-    <label>Min Aspect Ratio <span id="bmin" class="value">1.5</span></label>
+    <label>Min Aspect <span id="bmin" class="value">1.5</span></label>
     <input type="range" min="0.5" max="5" step="0.1" value="1.5"
       oninput="set('bumper.min_aspect', this.value, 'bmin')">
 
-    <label>Max Aspect Ratio <span id="bmax" class="value">4.0</span></label>
+    <label>Max Aspect <span id="bmax" class="value">4.0</span></label>
     <input type="range" min="1" max="10" step="0.5" value="4.0"
       oninput="set('bumper.max_aspect', this.value, 'bmax')">
-  </div>
-
-  <h3>Performance</h3>
-  <div class="group">
-    <label>FPS Smoothing Factor <span id="fps" class="value">0.2</span></label>
-    <input type="range" min="0.05" max="0.5" step="0.05" value="0.2"
-      oninput="set('performance.fps_smoothing_factor', this.value, 'fps')">
-  </div>
-
-  <h3>Debug</h3>
-  <div class="group">
-    <label>
-      <input type="checkbox" id="overlay" checked onchange="setCheckbox('debug.show_overlay', this.checked)">
-      Show Overlay
-    </label>
-    <label>
-      <input type="checkbox" id="verbose" checked onchange="setCheckbox('debug.show_verbose', this.checked)">
-      Show Verbose
-    </label>
-  </div>
-
-  <h3>Camera Settings</h3>
-  <div class="group">
-    <label>Device ID</label>
-    <input type="number" id="cam_dev" value="0" min="0" max="10" 
-      onchange="set('camera.device', this.value, null)">
-
-    <label>Width</label>
-    <input type="number" id="cam_w" value="640" min="320" max="1920" 
-      onchange="set('camera.width', this.value, null)">
-
-    <label>Height</label>
-    <input type="number" id="cam_h" value="480" min="240" max="1080" 
-      onchange="set('camera.height', this.value, null)">
-  </div>
-
-  <h3>Server Settings</h3>
-  <div class="group">
-    <label>Port</label>
-    <input type="number" id="srv_port" value="1403" min="1" max="65535" 
-      onchange="set('server.port', this.value, null)">
-
-    <label>Host</label>
-    <input type="text" id="srv_host" value="0.0.0.0" 
-      onchange="set('server.host', this.value, null)">
   </div>
 
   <div class="button-group">
     <button onclick="resetConfig()">Reset to Defaults</button>
   </div>
   
-  <div id="status" class="status">Configuration saved!</div>
+  <div id="status" class="status">Saved!</div>
 </div>
 
 <div id="video-container">
-  <img src="/processed" style="max-width:90%; max-height:90vh;">
+  <img src="/processed">
+</div>
+
+<div id="graphs">
+  <h3 style="margin-top:0;">Performance Metrics</h3>
+  
+  <div class="stat-box">
+    <span class="stat-label">FPS</span>
+    <span class="stat-value" id="fps-value">0</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-label">Frame Time</span>
+    <span class="stat-value" id="frametime-value">0 ms</span>
+  </div>
+  
+  <div class="chart-container">
+    <div class="chart-title">FPS Over Time</div>
+    <canvas id="fpsChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-title">Pipeline Timing Breakdown</div>
+    <canvas id="timingChart"></canvas>
+  </div>
+
+  <h3>System Resources</h3>
+  
+  <div class="stat-box">
+    <span class="stat-label">CPU Usage</span>
+    <span class="stat-value" id="cpu-value">0%</span>
+  </div>
+  <div class="stat-box">
+    <span class="stat-label">Memory Usage</span>
+    <span class="stat-value" id="mem-value">0%</span>
+  </div>
+  <div class="stat-box" id="temp-box" style="display:none;">
+    <span class="stat-label">Temperature</span>
+    <span class="stat-value" id="temp-value">0°C</span>
+  </div>
+
+  <div class="chart-container">
+    <div class="chart-title">CPU & Memory Usage</div>
+    <canvas id="systemChart"></canvas>
+  </div>
 </div>
 
 <script>
+// Chart.js default config
+Chart.defaults.color = '#999';
+Chart.defaults.borderColor = '#333';
+Chart.defaults.font.family = "'Segoe UI', sans-serif";
+
+const maxDataPoints = 60;
+
+// FPS Chart
+const fpsChart = new Chart(document.getElementById('fpsChart'), {
+  type: 'line',
+  data: {
+    labels: Array(maxDataPoints).fill(''),
+    datasets: [{
+      label: 'FPS',
+      data: Array(maxDataPoints).fill(0),
+      borderColor: '#00ff88',
+      backgroundColor: 'rgba(0, 255, 136, 0.1)',
+      borderWidth: 2,
+      tension: 0.4,
+      fill: true
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 80,
+        grid: { color: '#222' }
+      },
+      x: { display: false }
+    }
+  }
+});
+
+// Timing Breakdown Chart
+const timingChart = new Chart(document.getElementById('timingChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Color', 'Metallic', 'Morph', 'BBox', 'Robot'],
+    datasets: [{
+      label: 'Time (ms)',
+      data: [0, 0, 0, 0, 0],
+      backgroundColor: ['#ff6384', '#36a2eb', '#ffce56', '#4bc0c0', '#9966ff'],
+      borderWidth: 0
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: '#222' }
+      },
+      x: { grid: { display: false } }
+    }
+  }
+});
+
+// System Resources Chart
+const systemChart = new Chart(document.getElementById('systemChart'), {
+  type: 'line',
+  data: {
+    labels: Array(maxDataPoints).fill(''),
+    datasets: [
+      {
+        label: 'CPU %',
+        data: Array(maxDataPoints).fill(0),
+        borderColor: '#ff6384',
+        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true
+      },
+      {
+        label: 'Memory %',
+        data: Array(maxDataPoints).fill(0),
+        borderColor: '#36a2eb',
+        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+        borderWidth: 2,
+        tension: 0.4,
+        fill: true
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: true,
+    animation: false,
+    plugins: {
+      legend: {
+        display: true,
+        position: 'top',
+        labels: { color: '#999', font: { size: 11 } }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        max: 100,
+        grid: { color: '#222' }
+      },
+      x: { display: false }
+    }
+  }
+});
+
+// Update charts with new data
+function updateCharts(stats) {
+  // Update stat boxes
+  document.getElementById('fps-value').innerText = stats.performance.fps;
+  document.getElementById('frametime-value').innerText = stats.performance.frame_time_ms + ' ms';
+  document.getElementById('cpu-value').innerText = stats.system.cpu_percent + '%';
+  document.getElementById('mem-value').innerText = stats.system.memory_percent + '%';
+  
+  if (stats.system.temperature !== null) {
+    document.getElementById('temp-box').style.display = 'flex';
+    document.getElementById('temp-value').innerText = stats.system.temperature + '°C';
+  }
+  
+  // Update FPS chart
+  fpsChart.data.datasets[0].data.push(stats.performance.fps);
+  fpsChart.data.datasets[0].data.shift();
+  fpsChart.update('none');
+  
+  // Update timing chart
+  const timings = stats.performance.timings;
+  timingChart.data.datasets[0].data = [
+    timings.color_ms,
+    timings.metallic_ms,
+    timings.morph_ms,
+    timings.bbox_ms,
+    timings.robot_ms
+  ];
+  timingChart.update('none');
+  
+  // Update system chart
+  systemChart.data.datasets[0].data.push(stats.system.cpu_percent);
+  systemChart.data.datasets[0].data.shift();
+  systemChart.data.datasets[1].data.push(stats.system.memory_percent);
+  systemChart.data.datasets[1].data.shift();
+  systemChart.update('none');
+}
+
+// Poll stats every 100ms
+setInterval(() => {
+  fetch('/api/stats')
+    .then(r => r.json())
+    .then(updateCharts)
+    .catch(e => console.error('Stats fetch error:', e));
+}, 100);
+
+// Config management
 function set(key, value, id) {
   if (id) {
     document.getElementById(id).innerText = value;
@@ -389,26 +702,23 @@ function resetConfig() {
     fetch('/api/config/reset', { method: 'POST' })
       .then(r => r.json())
       .then(() => {
-        showStatus('Settings reset to defaults!');
+        showStatus('Reset!');
         setTimeout(() => location.reload(), 1000);
       });
   }
 }
 
-function showStatus(msg = 'Configuration saved!') {
+function showStatus(msg = 'Saved!') {
   const status = document.getElementById('status');
   status.innerText = msg;
   status.style.display = 'block';
-  setTimeout(() => { status.style.display = 'none'; }, 2000);
+  setTimeout(() => { status.style.display = 'none'; }, 1500);
 }
 
-// Load initial config and populate UI
+// Load initial config
 fetch('/api/config')
   .then(r => r.json())
   .then(cfg => {
-    console.log('Loaded config:', cfg);
-    
-    // Update UI with loaded values
     document.getElementById('rf').innerText = cfg.color.red_factor;
     document.querySelector('input[oninput*="color.red_factor"]').value = cfg.color.red_factor;
     
@@ -438,19 +748,6 @@ fetch('/api/config')
     
     document.getElementById('bmax').innerText = cfg.bumper.max_aspect;
     document.querySelector('input[oninput*="bumper.max_aspect"]').value = cfg.bumper.max_aspect;
-    
-    document.getElementById('fps').innerText = cfg.performance.fps_smoothing_factor;
-    document.querySelector('input[oninput*="fps_smoothing_factor"]').value = cfg.performance.fps_smoothing_factor;
-    
-    document.getElementById('overlay').checked = cfg.debug.show_overlay;
-    document.getElementById('verbose').checked = cfg.debug.show_verbose;
-    
-    document.getElementById('cam_dev').value = cfg.camera.device;
-    document.getElementById('cam_w').value = cfg.camera.width;
-    document.getElementById('cam_h').value = cfg.camera.height;
-    
-    document.getElementById('srv_port').value = cfg.server.port;
-    document.getElementById('srv_host').value = cfg.server.host;
   });
 </script>
 
