@@ -62,7 +62,7 @@ class ServerConfig:
 class NetworkTablesConfig:
     enabled: bool = True
     team_number: int = 1403
-    server_ip: str = "127.0.0.1"  # Empty = auto-detect roborio
+    server_ip: str = "127.0.0.1"  # Empty = auto-detect roborio (FOR ACTUAL PROD CHANGE TO BE EMPTY)
     update_rate_hz: float = 30.0  # How often to publish
 
 # ---------- Main config ----------

@@ -5,32 +5,33 @@ from vision.detection_data import DetectionResult
 logger = logging.getLogger(__name__)
 
 try:
-    from networktables import NetworkTables
-    NT_AVAILABLE = True
+    import ntcore
+    NT4_AVAILABLE = True
 except ImportError:
-    logger.warning("pynetworktables3 not installed. NetworkTables support disabled.")
-    NT_AVAILABLE = False
+    logger.warning("pyntcore not installed. Install with: pip3 install pyntcore")
+    NT4_AVAILABLE = False
 
 
 class NetworkTablesPublisher:
     """
-    Publishes robot detection data to NetworkTables for consumption by robot code
+    Publishes robot detection data to NetworkTables using NT4 (pyntcore)
     """
     
-    def __init__(self, enabled: bool = True, team_number: int = 1403, server_ip: str = "10.0.0.199"):
+    def __init__(self, enabled: bool = True, team_number: int = 1403, server_ip: str = ""):
         """
         Args:
             enabled: Whether to publish to NetworkTables
-            team_number: FRC team number (for auto-detecting roborio)
-            server_ip: Manual server IP (leave empty for auto-detect)
+            team_number: FRC team number
+            server_ip: Server IP (empty string = run as server)
         """
-        self.enabled = enabled and NT_AVAILABLE
+        self.enabled = enabled and NT4_AVAILABLE
         self.team_number = team_number
         self.connected = False
-        self.table = None
+        self.nt4_inst = None
+        self.vision_table = None
         
-        if not NT_AVAILABLE:
-            logger.warning("NetworkTables not available - install with: pip3 install pynetworktables3")
+        if not NT4_AVAILABLE:
+            logger.warning("NT4 not available")
             self.enabled = False
             return
         
@@ -39,34 +40,41 @@ class NetworkTablesPublisher:
             return
         
         try:
-            # Initialize NetworkTables
-            NetworkTables.initialize(server=server_ip if server_ip else None)
+            self.nt4_inst = ntcore.NetworkTableInstance.getDefault()
             
             if not server_ip:
-                # Auto-detect roborio
-                logger.info(f"Connecting to roborio-{team_number}-frc.local or 10.{team_number//100}.{team_number%100}.2")
+                # Run as server
+                logger.info("NT4: Starting server on port 5810")
+                self.nt4_inst.startServer()
             else:
-                logger.info(f"Connecting to NetworkTables server at {server_ip}")
+                # Connect as client
+                logger.info(f"NT4: Connecting to {server_ip}")
+                self.nt4_inst.setServer(server_ip)
+                self.nt4_inst.startClient4("vision-client")
             
-            # Get vision table
-            self.table = NetworkTables.getTable("Vision")
+            self.vision_table = self.nt4_inst.getTable("Vision")
             
-            # Set connection listener
-            NetworkTables.addConnectionListener(self._connection_listener, immediateNotify=True)
+            # Add connection listener (use prefix list, not table)
+            listener_handle = self.nt4_inst.addListener(
+                ["/"],  # Listen to root
+                ntcore.EventFlags.kConnection,
+                self._connection_listener
+            )
             
-            logger.info("NetworkTables publisher initialized")
+            logger.info("NT4 initialized successfully")
             
         except Exception as e:
-            logger.error(f"Failed to initialize NetworkTables: {e}")
+            logger.error(f"Failed to initialize NT4: {e}")
             self.enabled = False
     
-    def _connection_listener(self, connected, info):
-        """Callback for connection status changes"""
-        self.connected = connected
-        if connected:
-            logger.info(f"Connected to NetworkTables server: {info.remote_ip}")
-        else:
-            logger.warning("Disconnected from NetworkTables server")
+    def _connection_listener(self, event):
+        """NT4 connection callback"""
+        if event.flags & ntcore.EventFlags.kConnected:
+            self.connected = True
+            logger.info("NT4: Connected")
+        elif event.flags & ntcore.EventFlags.kDisconnected:
+            self.connected = False
+            logger.warning("NT4: Disconnected")
     
     def publish(self, detections: Optional[DetectionResult]):
         """
@@ -96,29 +104,29 @@ class NetworkTablesPublisher:
               └── [1]/
                   └── ...
         """
-        if not self.enabled or self.table is None:
+        if not self.enabled or self.vision_table is None:
             return
         
         try:
             if detections is None or not detections.has_targets:
                 # No targets
-                self.table.putBoolean("hasTargets", False)
-                self.table.putNumber("robotCount", 0)
-                self.table.putNumber("redCount", 0)
-                self.table.putNumber("blueCount", 0)
+                self.vision_table.putBoolean("hasTargets", False)
+                self.vision_table.putNumber("robotCount", 0)
+                self.vision_table.putNumber("redCount", 0)
+                self.vision_table.putNumber("blueCount", 0)
                 return
             
             # Publish top-level data
-            self.table.putBoolean("hasTargets", True)
-            self.table.putNumber("robotCount", len(detections.robots))
-            self.table.putNumber("redCount", len(detections.red_robots))
-            self.table.putNumber("blueCount", len(detections.blue_robots))
-            self.table.putNumber("timestamp", detections.timestamp)
-            self.table.putNumber("frameNumber", detections.frame_number)
+            self.vision_table.putBoolean("hasTargets", True)
+            self.vision_table.putNumber("robotCount", len(detections.robots))
+            self.vision_table.putNumber("redCount", len(detections.red_robots))
+            self.vision_table.putNumber("blueCount", len(detections.blue_robots))
+            self.vision_table.putNumber("timestamp", detections.timestamp)
+            self.vision_table.putNumber("frameNumber", detections.frame_number)
             
             # Publish individual robot data
             for i, robot in enumerate(detections.robots):
-                robot_table = self.table.getSubTable(f"robots/{i}")
+                robot_table = self.vision_table.getSubTable(f"robots/{i}")
                 
                 robot_table.putNumber("x", robot.center_x)
                 robot_table.putNumber("y", robot.center_y)
@@ -136,19 +144,8 @@ class NetworkTablesPublisher:
                 if robot.angle_degrees is not None:
                     robot_table.putNumber("angle", robot.angle_degrees)
             
-            # Clear old robot entries if we have fewer robots now
-            # (e.g., if we had 3 robots before but now only have 2)
-            max_robots = 10  # Assume max 10 robots
-            for i in range(len(detections.robots), max_robots):
-                robot_table = self.table.getSubTable(f"robots/{i}")
-                if robot_table.containsKey("x"):
-                    # Clear this entry by setting trackId to -1
-                    robot_table.putNumber("trackId", -1)
-                else:
-                    break  # No more old entries
-            
         except Exception as e:
-            logger.error(f"Error publishing to NetworkTables: {e}", exc_info=True)
+            logger.error(f"Error publishing to NT4: {e}", exc_info=True)
     
     def is_connected(self) -> bool:
         """Check if connected to NetworkTables server"""
@@ -156,9 +153,9 @@ class NetworkTablesPublisher:
     
     def shutdown(self):
         """Clean shutdown of NetworkTables"""
-        if self.enabled and NT_AVAILABLE:
+        if self.enabled and self.nt4_inst:
             try:
-                NetworkTables.shutdown()
-                logger.info("NetworkTables shut down")
+                self.nt4_inst.stopClient()
+                logger.info("NT4 shut down")
             except Exception as e:
-                logger.error(f"Error shutting down NetworkTables: {e}")
+                logger.error(f"Error shutting down NT4: {e}")
