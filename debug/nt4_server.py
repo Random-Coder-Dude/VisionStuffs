@@ -35,7 +35,7 @@ try:
         if time.time() - last_check > 2.0:
             has_targets = vision.getBoolean("hasTargets", None)
             if has_targets is not None:
-                print(f"✅ Client active - receiving data")
+                continue
             else:
                 print(f"⏳ Waiting for clients...")
             last_check = time.time()
