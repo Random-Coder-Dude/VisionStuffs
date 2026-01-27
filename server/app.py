@@ -8,6 +8,7 @@ from server.state import SharedState
 from vision.detector import BumperDetector
 from vision.config import DetectorConfig
 from vision.system_monitor import SystemMonitor
+from vision.networktables_publisher import NetworkTablesPublisher
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -29,6 +30,13 @@ detector = BumperDetector(config)
 system_monitor = SystemMonitor()
 system_monitor.start()
 
+# Initialize NetworkTables publisher
+nt_publisher = NetworkTablesPublisher(
+    enabled=config.networktables.enabled,
+    team_number=config.networktables.team_number,
+    server_ip=config.networktables.server_ip
+)
+
 # ---------------- Streaming ----------------
 def stream(processed=False):
     while True:
@@ -42,6 +50,8 @@ def stream(processed=False):
         try:
             if processed:
                 frame = detector.detect(frame)
+                # Publish detections to NetworkTables
+                nt_publisher.publish(detector.latest_detections)
 
             ret, jpg = cv2.imencode(".jpg", frame)
             if not ret:
@@ -67,6 +77,85 @@ def processed():
     return Response(stream(True),
         mimetype="multipart/x-mixed-replace; boundary=frame")
 
+# ---------------- Debug Streams ----------------
+def stream_debug_red():
+    """Stream red color mask"""
+    while True:
+        red_mask = detector.get_red_mask()
+        if red_mask is None:
+            time.sleep(0.01)
+            continue
+
+        try:
+            ret, jpg = cv2.imencode(".jpg", red_mask)
+            if not ret:
+                time.sleep(0.01)
+                continue
+                
+            yield (b"--frame\r\n"
+                   b"Content-Type: image/jpeg\r\n\r\n" +
+                   jpg.tobytes() + b"\r\n")
+        except Exception as e:
+            logger.error(f"Red mask stream error: {e}")
+            time.sleep(0.01)
+
+def stream_debug_blue():
+    """Stream blue color mask"""
+    while True:
+        blue_mask = detector.get_blue_mask()
+        if blue_mask is None:
+            time.sleep(0.01)
+            continue
+
+        try:
+            ret, jpg = cv2.imencode(".jpg", blue_mask)
+            if not ret:
+                time.sleep(0.01)
+                continue
+                
+            yield (b"--frame\r\n"
+                   b"Content-Type: image/jpeg\r\n\r\n" +
+                   jpg.tobytes() + b"\r\n")
+        except Exception as e:
+            logger.error(f"Blue mask stream error: {e}")
+            time.sleep(0.01)
+
+def stream_debug_metallic():
+    """Stream metallic detection buffer"""
+    while True:
+        metallic = detector.get_metallic_buffer()
+        if metallic is None:
+            time.sleep(0.01)
+            continue
+
+        try:
+            ret, jpg = cv2.imencode(".jpg", metallic)
+            if not ret:
+                time.sleep(0.01)
+                continue
+                
+            yield (b"--frame\r\n"
+                   b"Content-Type: image/jpeg\r\n\r\n" +
+                   jpg.tobytes() + b"\r\n")
+        except Exception as e:
+            logger.error(f"Metallic stream error: {e}")
+            time.sleep(0.01)
+
+@app.route("/debug/red")
+def debug_red():
+    return Response(stream_debug_red(),
+        mimetype="multipart/x-mixed-replace; boundary=frame")
+
+@app.route("/debug/blue")
+def debug_blue():
+    return Response(stream_debug_blue(),
+        mimetype="multipart/x-mixed-replace; boundary=frame")
+
+@app.route("/debug/metallic")
+def debug_metallic():
+    return Response(stream_debug_metallic(),
+        mimetype="multipart/x-mixed-replace; boundary=frame")
+
 # ---------------- Stats API ----------------
 @app.route("/api/stats", methods=["GET"])
 def get_stats():
@@ -87,6 +176,36 @@ def get_stats():
         },
         "system": system_monitor.get_stats()
     })
+
+# ---------------- Detection API ----------------
+@app.route("/api/detections", methods=["GET"])
+def get_detections():
+    """Get latest detection results with tracking IDs"""
+    try:
+        if detector.latest_detections is None:
+            return jsonify({
+                "has_targets": False,
+                "robot_count": 0,
+                "red_count": 0,
+                "blue_count": 0,
+                "robots": [],
+                "timestamp": time.time(),
+                "frame_number": 0,
+                "active_ids": {"red": [], "blue": []}
+            })
+        
+        result = detector.latest_detections.to_dict()
+        result["active_ids"] = detector.tracker.get_active_ids()
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error in get_detections: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/tracking/reset", methods=["POST"])
+def reset_tracking():
+    """Reset tracking state (clear all IDs)"""
+    detector.tracker.reset()
+    return jsonify({"status": "ok", "message": "Tracking reset"})
 
 # ---------------- Hot-reload config API ----------------
 def validate_and_set_config(config_obj, key_parts, value):

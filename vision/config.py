@@ -57,6 +57,14 @@ class ServerConfig:
     port: int = 1403
     host: str = "0.0.0.0"
 
+# ---------- NetworkTables settings ----------
+@dataclass
+class NetworkTablesConfig:
+    enabled: bool = True
+    team_number: int = 1403
+    server_ip: str = "127.0.0.1"  # Empty = auto-detect roborio
+    update_rate_hz: float = 30.0  # How often to publish
+
 # ---------- Main config ----------
 @dataclass
 class DetectorConfig:
@@ -68,6 +76,7 @@ class DetectorConfig:
     performance: PerformanceConfig = None
     camera: CameraConfig = None
     server: ServerConfig = None
+    networktables: NetworkTablesConfig = None
     
     def __post_init__(self):
         if self.color is None:
@@ -86,6 +95,8 @@ class DetectorConfig:
             self.camera = CameraConfig()
         if self.server is None:
             self.server = ServerConfig()
+        if self.networktables is None:
+            self.networktables = NetworkTablesConfig()
     
     def to_dict(self):
         """Convert config to dictionary for JSON serialization"""
@@ -97,7 +108,8 @@ class DetectorConfig:
             "debug": asdict(self.debug),
             "performance": asdict(self.performance),
             "camera": asdict(self.camera),
-            "server": asdict(self.server)
+            "server": asdict(self.server),
+            "networktables": asdict(self.networktables)
         }
     
     def from_dict(self, data):
@@ -142,6 +154,11 @@ class DetectorConfig:
                 for key, value in data["server"].items():
                     if hasattr(self.server, key):
                         setattr(self.server, key, value)
+            
+            if "networktables" in data:
+                for key, value in data["networktables"].items():
+                    if hasattr(self.networktables, key):
+                        setattr(self.networktables, key, value)
                         
         except Exception as e:
             logger.error(f"Error loading config from dict: {e}")
