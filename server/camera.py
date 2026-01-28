@@ -14,7 +14,8 @@ def camera_loop(state, device, width, height):
         try:
             if cap is None:
                 logger.info(f"Attempting to open camera device {device}")
-                cap = cv2.VideoCapture(device)
+                # Use DirectShow on Windows for faster initialization
+                cap = cv2.VideoCapture(device, cv2.CAP_DSHOW)
                 
                 if not cap.isOpened():
                     logger.error(f"Failed to open camera device {device}")

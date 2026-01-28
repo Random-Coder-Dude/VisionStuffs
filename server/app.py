@@ -37,7 +37,9 @@ system_monitor.start()
 nt_publisher = NetworkTablesPublisher(
     enabled=config.networktables.enabled,
     team_number=config.networktables.team_number,
-    server_ip=config.networktables.server_ip
+    server_ip=config.networktables.server_ip,
+    camera_width=config.camera.width,
+    camera_height=config.camera.height
 )
 
 # ---------------- Streaming ----------------

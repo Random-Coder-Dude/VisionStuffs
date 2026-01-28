@@ -26,9 +26,7 @@ class RobotDetection:
     # Timestamp
     timestamp: float = field(default_factory=time.time)
     
-    # Optional: Calculated pose (distance, angle)
-    distance_meters: Optional[float] = None
-    angle_degrees: Optional[float] = None
+
     
     def get_label(self) -> str:
         """Get human-readable label like 'RED1' or 'BLUE2'"""
@@ -49,9 +47,7 @@ class RobotDetection:
             'is_blue': bool(self.is_blue),
             'track_id': int(self.track_id) if self.track_id is not None else None,
             'label': self.get_label(),
-            'timestamp': float(self.timestamp),
-            'distance_meters': float(self.distance_meters) if self.distance_meters is not None else None,
-            'angle_degrees': float(self.angle_degrees) if self.angle_degrees is not None else None
+            'timestamp': float(self.timestamp)
         }
 
 @dataclass

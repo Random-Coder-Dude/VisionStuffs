@@ -17,18 +17,23 @@ class NetworkTablesPublisher:
     Publishes robot detection data to NetworkTables using NT4 (pyntcore)
     """
     
-    def __init__(self, enabled: bool = True, team_number: int = 1403, server_ip: str = ""):
+    def __init__(self, enabled: bool = True, team_number: int = 1403, server_ip: str = "", 
+                 camera_width: int = 640, camera_height: int = 480):
         """
         Args:
             enabled: Whether to publish to NetworkTables
             team_number: FRC team number
             server_ip: Server IP (empty string = run as server)
+            camera_width: Camera width for user calculations
+            camera_height: Camera height for user calculations
         """
         self.enabled = enabled and NT4_AVAILABLE
         self.team_number = team_number
         self.connected = False
         self.nt4_inst = None
         self.vision_table = None
+        self.camera_width = camera_width
+        self.camera_height = camera_height
         
         if not NT4_AVAILABLE:
             logger.warning("NT4 not available")
@@ -88,19 +93,23 @@ class NetworkTablesPublisher:
           ├── blueCount (int)
           ├── timestamp (float)
           ├── frameNumber (int)
+          ├── cameraWidth (int)
+          ├── cameraHeight (int)
           └── robots/
               ├── [0]/
-              │   ├── x (float)
-              │   ├── y (float)
-              │   ├── width (int)
+              │   ├── centerX (float)     - Center of bounding box
+              │   ├── centerY (float)
+              │   ├── x (int)             - Top-left corner (raw BB)
+              │   ├── y (int)
+              │   ├── width (int)         - Bounding box dimensions
               │   ├── height (int)
-              │   ├── confidence (float)
+              │   ├── confidence (float)  - Detection confidence (0-1)
               │   ├── isRed (bool)
               │   ├── isBlue (bool)
-              │   ├── trackId (int)
-              │   ├── label (string)
-              │   ├── distance (float)
-              │   └── angle (float)
+              │   ├── trackId (int)       - Persistent tracking ID
+              │   ├── label (string)      - e.g., "RED1", "BLUE2"
+              │   ├── distance (float)    - EMPTY - for user calculations
+              │   └── angle (float)       - EMPTY - for user calculations
               └── [1]/
                   └── ...
         """
@@ -123,16 +132,22 @@ class NetworkTablesPublisher:
             self.vision_table.putNumber("blueCount", len(detections.blue_robots))
             self.vision_table.putNumber("timestamp", detections.timestamp)
             self.vision_table.putNumber("frameNumber", detections.frame_number)
-            self.vision_table.putNumber("cameraWidth", )
-            self.vision_table.putNumber("camera height", )
-
+            
+            # Camera resolution for user calculations
+            self.vision_table.putNumber("cameraWidth", self.camera_width)
+            self.vision_table.putNumber("cameraHeight", self.camera_height)
             
             # Publish individual robot data
             for i, robot in enumerate(detections.robots):
                 robot_table = self.vision_table.getSubTable(f"robots/{i}")
                 
-                robot_table.putNumber("x", robot.center_x)
-                robot_table.putNumber("y", robot.center_y)
+                # Center position
+                robot_table.putNumber("centerX", robot.center_x)
+                robot_table.putNumber("centerY", robot.center_y)
+                
+                # Raw bounding box (top-left corner + dimensions)
+                robot_table.putNumber("x", robot.x)
+                robot_table.putNumber("y", robot.y)
                 robot_table.putNumber("width", robot.width)
                 robot_table.putNumber("height", robot.height)
                 robot_table.putNumber("confidence", robot.confidence)
