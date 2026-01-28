@@ -10,15 +10,15 @@ CONFIG_FILE = "vision_config.json"
 # ---------- Color detection ----------
 @dataclass
 class ColorConfig:
-    red_factor: float = 1.0
-    blue_factor: float = 1.0
+    red_factor: float = 2.0
+    blue_factor: float = 2.0
 
 # ---------- Bumper geometry ----------
 @dataclass
 class BumperConfig:
     min_area: int = 1000
     min_aspect: float = 1.5
-    max_aspect: float = 4.0
+    max_aspect: float = 4.5
 
 # ---------- Morphology ----------
 @dataclass
@@ -30,7 +30,7 @@ class MorphConfig:
 @dataclass
 class MetalConfig:
     threshold: float = 0.25
-    spread_weight: float = 0.7
+    spread_weight: float = 0.3
     search_height_multiplier: float = 1.0
 
 # ---------- Debug / UI ----------

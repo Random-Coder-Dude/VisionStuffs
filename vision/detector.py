@@ -5,7 +5,7 @@ import logging
 from vision.metrics import RollingAverage
 from vision.detection_data import RobotDetection, DetectionResult
 from vision.tracker import RobotTracker
-from vision.camera_calibration import CameraCalibration
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -53,14 +53,7 @@ class BumperDetector:
         self.frame_number = 0
         self.latest_detections = None
 
-        # Camera calibration (optional pose estimation)
-        self.calibration = CameraCalibration(
-            focal_length_px=500.0,
-            image_width=config.camera.width,
-            image_height=config.camera.height,
-            camera_height_m=0.5,
-            camera_angle_deg=0.0
-        )
+
 
     # ---------- Morph kernel hot reload ----------
     def _update_kernel_if_needed(self):
@@ -176,9 +169,6 @@ class BumperDetector:
                     timestamp=time.time()
                 )
 
-                # Add pose estimation
-                self.calibration.add_pose_to_detection(detection)
-
                 detections.append(detection)
 
         # Process blue bumpers
@@ -210,8 +200,6 @@ class BumperDetector:
                     is_blue=True,
                     timestamp=time.time()
                 )
-
-                self.calibration.add_pose_to_detection(detection)
 
                 detections.append(detection)
 

@@ -13,6 +13,9 @@ from vision.networktables_publisher import NetworkTablesPublisher
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Disable werkzeug request logging
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
 app = Flask(__name__)
 
 state = SharedState()

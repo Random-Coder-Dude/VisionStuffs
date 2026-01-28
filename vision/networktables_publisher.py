@@ -123,6 +123,9 @@ class NetworkTablesPublisher:
             self.vision_table.putNumber("blueCount", len(detections.blue_robots))
             self.vision_table.putNumber("timestamp", detections.timestamp)
             self.vision_table.putNumber("frameNumber", detections.frame_number)
+            self.vision_table.putNumber("cameraWidth", )
+            self.vision_table.putNumber("camera height", )
+
             
             # Publish individual robot data
             for i, robot in enumerate(detections.robots):
@@ -137,12 +140,6 @@ class NetworkTablesPublisher:
                 robot_table.putBoolean("isBlue", robot.is_blue)
                 robot_table.putNumber("trackId", robot.track_id if robot.track_id is not None else -1)
                 robot_table.putString("label", robot.get_label())
-                
-                # Optional pose data
-                if robot.distance_meters is not None:
-                    robot_table.putNumber("distance", robot.distance_meters)
-                if robot.angle_degrees is not None:
-                    robot_table.putNumber("angle", robot.angle_degrees)
             
         except Exception as e:
             logger.error(f"Error publishing to NT4: {e}", exc_info=True)
