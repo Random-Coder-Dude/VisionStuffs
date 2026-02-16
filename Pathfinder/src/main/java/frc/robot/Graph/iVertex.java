@@ -5,8 +5,12 @@ import edu.wpi.first.wpilibj2.command.Command;
 
 public interface iVertex {
     double pointAdjust(double time);
+
     Command getRunCommand();
+
     Pose2d getTargetPose();
+
     double getExpectedPoints();
+
     double getExpectedRP();
 }

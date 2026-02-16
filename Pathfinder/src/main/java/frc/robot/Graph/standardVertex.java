@@ -13,7 +13,8 @@ public class standardVertex implements iVertex {
     private double expectedPoints;
     private double expectedRP;
 
-    public standardVertex(double pointAdjustPeak, double pointAdjustStd, double pointAdjustScalar, Command runCommand, Pose2d targetPose,
+    public standardVertex(double pointAdjustPeak, double pointAdjustStd, double pointAdjustScalar, Command runCommand,
+            Pose2d targetPose,
             double expectedPoints, double expectedRP) {
         this.pointAdjustPeak = pointAdjustPeak;
         this.pointAdjustStd = pointAdjustStd;
@@ -26,8 +27,8 @@ public class standardVertex implements iVertex {
 
     public double pointAdjust(double timeLeftInMatch) {
         double timeDiff = timeLeftInMatch - pointAdjustPeak;
-        double exponent = -Math.pow(timeDiff,2) / (2*Math.pow(pointAdjustStd, 2));
-        return pointAdjustScalar*Math.exp(exponent);
+        double exponent = -Math.pow(timeDiff, 2) / (2 * Math.pow(pointAdjustStd, 2));
+        return pointAdjustScalar * Math.exp(exponent);
     }
 
     public Command getRunCommand() {
