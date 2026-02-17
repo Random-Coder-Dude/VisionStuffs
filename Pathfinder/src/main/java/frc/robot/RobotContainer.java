@@ -5,10 +5,15 @@
 package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
+import frc.robot.Graph.adjMatrix;
+import frc.robot.Graph.iVertex;
+import frc.robot.Graph.standardVertex;
 import frc.robot.commands.Autos;
 import frc.robot.commands.ExampleCommand;
 import frc.robot.subsystems.ExampleSubsystem;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
@@ -48,7 +53,16 @@ public class RobotContainer {
 
     // Schedule `exampleMethodCommand` when the Xbox controller's B button is pressed,
     // cancelling on release.
-    m_driverController.b().whileTrue(m_exampleSubsystem.exampleMethodCommand());
+    iVertex v1 = new standardVertex(15, 1, 3, null, null, 50, 10);
+    iVertex v2 = new standardVertex(25, 3, 2, null, null, 10, 0);
+    iVertex v3 = new standardVertex(10, 1, 5, null, null, 75, 15);
+
+    adjMatrix matrix = new adjMatrix(v1, v2, v3);
+
+      m_driverController.b().onTrue(new InstantCommand(() -> {
+        matrix.updateWeights();
+        matrix.printWeights();
+    }));
   }
 
   /**

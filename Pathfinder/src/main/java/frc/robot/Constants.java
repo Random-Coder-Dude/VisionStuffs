@@ -7,10 +7,12 @@ package frc.robot;
 import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.path.PathConstraints;
 
+import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.units.measure.AngularAcceleration;
 import edu.wpi.first.units.measure.AngularVelocity;
 import edu.wpi.first.units.measure.LinearAcceleration;
 import edu.wpi.first.units.measure.LinearVelocity;
+import edu.wpi.first.wpilibj.DriverStation;
 
 /**
  * The Constants class provides a convenient place for teams to hold robot-wide
@@ -29,17 +31,19 @@ public final class Constants {
     public static final int kDriverControllerPort = 0;
   }
 
-  public static final double k1 = 0;
-  public static final double k2 = 0;
-  public static final double k3 = 0;
+  public static final double k1 = 1;
+  public static final double k2 = 1;
+  public static final double k3 = 1;
   private static final LinearVelocity MAX_VELOCITY_MPS = null;
   private static final LinearAcceleration MAX_ACCELERATION_MPS_SQUARED = null;
   private static final AngularVelocity MAX_ANGULAR_VELOCITY_RAD_PER_SEC = null;
   private static final AngularAcceleration MAX_ANGULAR_ACCELERATION_RAD_PER_SEC_SQUARED = null;
-  public static final PathConstraints PATH_CONSTRAINTS = new PathConstraints(
-      MAX_VELOCITY_MPS,
-      MAX_ACCELERATION_MPS_SQUARED,
-      MAX_ANGULAR_VELOCITY_RAD_PER_SEC,
-      MAX_ANGULAR_ACCELERATION_RAD_PER_SEC_SQUARED);
+  // public static final PathConstraints PATH_CONSTRAINTS = new PathConstraints(
+  //     MAX_VELOCITY_MPS,
+  //     MAX_ACCELERATION_MPS_SQUARED,
+  //     MAX_ANGULAR_VELOCITY_RAD_PER_SEC,
+  //     MAX_ANGULAR_ACCELERATION_RAD_PER_SEC_SQUARED);
   public static final RobotConfig ROBOT_CONFIG = null;
+  public static double time = 0.0;
+public static final Pose2d robotPose = new Pose2d();
 }
