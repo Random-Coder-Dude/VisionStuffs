@@ -43,6 +43,7 @@ public class standardEdge implements iEdge {
             return Double.POSITIVE_INFINITY;
         } else {
             cachedTimeTerm = timeTerm;
+            System.out.println("cache updated");
         }
         double pointTerm = Constants.k2 * toVertex.getExpectedPoints();
         double miscTerm = (Helpers.getRobotScore() + toVertex.getExpectedRP()

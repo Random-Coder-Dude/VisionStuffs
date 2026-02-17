@@ -1,6 +1,8 @@
 package frc.robot.Graph;
 
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 public class adjMatrix {
 
@@ -70,7 +72,7 @@ public class adjMatrix {
         int n = vertices.length;
 
         for (int j = 0; j < n; j++) {
-            double cachedWeight = Double.POSITIVE_INFINITY;
+            Map<Class<?>, Double> cachedWeights = new HashMap<>();
 
             for (int i = 0; i < n; i++) {
                 if (i == j) {
@@ -79,19 +81,19 @@ public class adjMatrix {
                 }
 
                 iEdge edge = edges[i][j];
-
-                if (cachedWeight == Double.POSITIVE_INFINITY && edge != null && edge.getIsEnabled()) {
-                    cachedWeight = edge.getWeight();
+                if (edge == null) {
+                    weights[i][j] = Double.POSITIVE_INFINITY;
+                    continue;
                 }
 
-                if (edge != null && edge.getIsEnabled()) {
-                    weights[i][j] = cachedWeight;
+                if (edge.getIsEnabled()) {
+                    Class<?> edgeType = edge.getClass();
+                    weights[i][j] = cachedWeights.computeIfAbsent(edgeType, k -> edge.getWeight());
                 } else {
                     weights[i][j] = Double.POSITIVE_INFINITY;
                 }
             }
         }
-
     }
 
     public void printWeights() {
