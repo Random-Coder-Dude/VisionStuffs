@@ -1,2 +1,3 @@
 *.pyc
 *.json
+!src/main/deploy/*.json
