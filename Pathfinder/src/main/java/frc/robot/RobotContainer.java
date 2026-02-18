@@ -5,16 +5,14 @@
 package frc.robot;
 
 import frc.robot.Constants.OperatorConstants;
-import frc.robot.Graph.adjMatrix;
-import frc.robot.Graph.iVertex;
-import frc.robot.Graph.standardVertex;
 import frc.robot.commands.Autos;
 import frc.robot.commands.ExampleCommand;
 import frc.robot.subsystems.ExampleSubsystem;
-import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Transform2d;
+import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.RunCommand;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.Trigger;
 
@@ -65,16 +63,35 @@ public class RobotContainer {
     // Schedule `exampleMethodCommand` when the Xbox controller's B button is
     // pressed,
     // cancelling on release.
-iVertex v1 = new standardVertex(15, 1, 3, null, new Pose2d(2, 2, new Rotation2d()), 50, 10, "Vertex 1");
-iVertex v2 = new standardVertex(25, 3, 2, null, new Pose2d(5, 3, new Rotation2d()), 10, 0, "Vertex 2");
-iVertex v3 = new standardVertex(10, 1, 5, null, new Pose2d(8, 6, new Rotation2d()), 75, 15, "Vertex 3");
 
-    adjMatrix matrix = new adjMatrix(v1, v2, v3);
+    double moveIncrement = 0.05;
+    m_driverController.povUp().whileTrue(
+        new RunCommand(() -> {
+          Constants.robotPose = Constants.robotPose.plus(
+              new Transform2d(new Translation2d(0, moveIncrement), new Rotation2d(0)));
+        }));
 
-    m_driverController.b().onTrue(new InstantCommand(() -> {
-      matrix.updateWeights();
-      matrix.printWeights();
-    }));
+    // Move down
+    m_driverController.povDown().whileTrue(
+        new RunCommand(() -> {
+          Constants.robotPose = Constants.robotPose.plus(
+              new Transform2d(new Translation2d(0, -moveIncrement), new Rotation2d(0)));
+        }));
+
+    // Move right
+    m_driverController.povRight().whileTrue(
+        new RunCommand(() -> {
+          Constants.robotPose = Constants.robotPose.plus(
+              new Transform2d(new Translation2d(moveIncrement, 0), new Rotation2d(0)));
+        }));
+
+    // Move left
+    m_driverController.povLeft().whileTrue(
+        new RunCommand(() -> {
+          Constants.robotPose = Constants.robotPose.plus(
+              new Transform2d(new Translation2d(-moveIncrement, 0), new Rotation2d(0)));
+        }));
+
   }
 
   /**

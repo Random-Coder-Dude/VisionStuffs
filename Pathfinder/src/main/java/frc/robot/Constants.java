@@ -42,7 +42,7 @@ public final class Constants {
     public static final int kDriverControllerPort = 0;
   }
 
-  public static final double k1 = 1;
+  public static final double k1 = 10;
   public static final double k2 = 1;
   public static final double k3 = 1;
   private static final LinearVelocity MAX_VELOCITY_MPS = MetersPerSecond.of(4.5);
@@ -68,5 +68,5 @@ new ModuleConfig(
     Meters.of(0.55)
 );
   public static double time = 0.0;
-public static final Pose2d robotPose = new Pose2d();
+public static Pose2d robotPose = new Pose2d();
 }

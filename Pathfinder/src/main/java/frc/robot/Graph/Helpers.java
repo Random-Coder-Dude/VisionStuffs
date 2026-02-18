@@ -2,18 +2,12 @@ package frc.robot.Graph;
 
 import java.util.*;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
-import edu.wpi.first.math.trajectory.Trajectory;
-import edu.wpi.first.math.trajectory.TrajectoryConfig;
-import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Filesystem;
 import frc.robot.Constants;
-import org.littletonrobotics.junction.Logger;
 
 public class Helpers {
 
@@ -25,12 +19,7 @@ public class Helpers {
         field = new FieldGrid(Filesystem.getDeployDirectory().toPath().resolve(fieldJson).toString());
     }
 
-    /**
-     * Calculates the fastest path time to a target pose considering obstacles.
-     * Uses A* on the field grid and trapezoidal motion profiling.
-     * Logs the trajectory for AdvantageKit visualization.
-     */
-    public static double getPathTime(Pose2d targetPose) {
+    public static double getPathTime(Pose2d targetPose, iVertex vertex) {
         Pose2d startPose = robotPoseSupplier.get();
         int[] startCell = field.toCell(startPose.getTranslation());
         int[] targetCell = field.toCell(targetPose.getTranslation());
@@ -39,24 +28,6 @@ public class Helpers {
         if (path.isEmpty())
             return Double.POSITIVE_INFINITY;
 
-        // Convert path to Pose2d waypoints for trajectory
-        List<Pose2d> waypoints = path.stream()
-                .map(t -> new Pose2d(t, new Rotation2d()))
-                .collect(Collectors.toList());
-
-        // Trajectory configuration from constants
-        TrajectoryConfig config = new TrajectoryConfig(
-                Constants.PATH_CONSTRAINTS.maxVelocityMPS(),
-                Constants.PATH_CONSTRAINTS.maxAccelerationMPSSq()
-        );
-
-        // Generate trajectory
-        Trajectory trajectory = TrajectoryGenerator.generateTrajectory(waypoints, config);
-
-        // Log trajectory for AdvantageKit
-        Logger.recordOutput("Planned/Trajectory", trajectory);
-
-        // Compute path length manually for trapezoidal motion profiling
         double distance = 0.0;
         Translation2d last = path.get(0);
         for (int i = 1; i < path.size(); i++) {
@@ -64,7 +35,6 @@ public class Helpers {
             last = path.get(i);
         }
 
-        // Trapezoidal motion profile calculation
         double vmax = Constants.PATH_CONSTRAINTS.maxVelocityMPS();
         double amax = Constants.PATH_CONSTRAINTS.maxAccelerationMPSSq();
         double tAccel = vmax / amax;
@@ -72,10 +42,8 @@ public class Helpers {
 
         double time;
         if (2 * dAccel >= distance) {
-            // Triangular profile (never reaches max velocity)
             time = 2 * Math.sqrt(distance / amax);
         } else {
-            // Trapezoidal profile
             double dCruise = distance - 2 * dAccel;
             double tCruise = dCruise / vmax;
             time = 2 * tAccel + tCruise;
@@ -84,10 +52,14 @@ public class Helpers {
         return time;
     }
 
-    // Fast A* pathfinding on grid
     private static List<Translation2d> aStarPath(int[] startCell, int[] targetCell) {
-        int rows = field.getRows();
-        int cols = field.getCols();
+        final int rows = field.getRows();
+        final int cols = field.getCols();
+
+        final int startR = startCell[0];
+        final int startC = startCell[1];
+        final int targetR = targetCell[0];
+        final int targetC = targetCell[1];
 
         class Node implements Comparable<Node> {
             int r, c;
@@ -106,82 +78,91 @@ public class Helpers {
             public int compareTo(Node o) {
                 return Double.compare(this.f, o.f);
             }
-
-            @Override
-            public boolean equals(Object o) {
-                return o instanceof Node n && n.r == r && n.c == c;
-            }
-
-            @Override
-            public int hashCode() {
-                return Objects.hash(r, c);
-            }
         }
 
         PriorityQueue<Node> open = new PriorityQueue<>();
-        Map<String, Double> gScore = new HashMap<>();
         boolean[][] closed = new boolean[rows][cols];
 
-        Node startNode = new Node(startCell[0], startCell[1], 0, heuristic(startCell, targetCell), null);
-        open.add(startNode);
-        gScore.put(startCell[0] + "," + startCell[1], 0.0);
+        double[][] gScore = new double[rows][cols];
+        for (int r = 0; r < rows; r++) {
+            Arrays.fill(gScore[r], Double.POSITIVE_INFINITY);
+        }
 
-        int[][] neighbors = {
+        gScore[startR][startC] = 0.0;
+
+        open.add(new Node(
+                startR,
+                startC,
+                0.0,
+                heuristic(startR, startC, targetR, targetC),
+                null));
+
+        final int[][] neighbors = {
                 { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 },
                 { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 }
         };
 
         Node endNode = null;
+
         while (!open.isEmpty()) {
             Node current = open.poll();
-            if (current.r == targetCell[0] && current.c == targetCell[1]) {
+
+            if (closed[current.r][current.c])
+                continue;
+
+            if (current.r == targetR && current.c == targetC) {
                 endNode = current;
                 break;
             }
-            if (closed[current.r][current.c])
-                continue;
+
             closed[current.r][current.c] = true;
 
-            for (int[] n : neighbors) {
-                int nr = current.r + n[0];
-                int nc = current.c + n[1];
+            for (int[] d : neighbors) {
+                int nr = current.r + d[0];
+                int nc = current.c + d[1];
+
                 if (nr < 0 || nr >= rows || nc < 0 || nc >= cols)
                     continue;
+
                 if (!field.isPassable(nr, nc))
                     continue;
 
-                double moveCost = (n[0] != 0 && n[1] != 0) ? Math.sqrt(2) : 1.0;
-                double gNew = current.g + moveCost;
-                String key = nr + "," + nc;
-
-                if (gScore.containsKey(key) && gNew >= gScore.get(key))
+                if (closed[nr][nc])
                     continue;
 
-                gScore.put(key, gNew);
-                open.add(new Node(nr, nc, gNew, gNew + heuristic(new int[] { nr, nc }, targetCell), current));
+                double moveCost = (d[0] != 0 && d[1] != 0) ? Math.sqrt(2) : 1.0;
+                double gNew = current.g + moveCost;
+
+                if (gNew >= gScore[nr][nc])
+                    continue;
+
+                gScore[nr][nc] = gNew;
+
+                double fNew = gNew + heuristic(nr, nc, targetR, targetC);
+
+                open.add(new Node(nr, nc, gNew, fNew, current));
             }
         }
 
         if (endNode == null)
             return Collections.emptyList();
 
-        // Reconstruct path
         List<Translation2d> path = new ArrayList<>();
         Node n = endNode;
+
         while (n != null) {
             path.add(field.toField(n.r, n.c));
             n = n.parent;
         }
-        Collections.reverse(path);
 
+        Collections.reverse(path);
         return path;
     }
 
-    // Euclidean heuristic in meters
-    private static double heuristic(int[] a, int[] b) {
-        Translation2d posA = field.toField(a[0], a[1]);
-        Translation2d posB = field.toField(b[0], b[1]);
-        return posA.getDistance(posB);
+    private static double heuristic(int r1, int c1, int r2, int c2) {
+        double dr = r1 - r2;
+        double dc = c1 - c2;
+        return Math.sqrt(dr * dr + dc * dc);
     }
 
     public static double getRobotScore() {

@@ -38,20 +38,23 @@ public class standardEdge implements iEdge {
             return Double.POSITIVE_INFINITY;
         }
 
-        double timeTerm = Constants.k1 * Helpers.getPathTime(toVertex.getTargetPose());
-        if (timeTerm == Double.POSITIVE_INFINITY) {
-            timeTerm = cachedTimeTerm;
-        } else if (timeTerm == Double.NEGATIVE_INFINITY) {
+        double timeTerm = Constants.k1 * Helpers.getPathTime(toVertex.getTargetPose(), toVertex);
+
+        if (Double.isInfinite(timeTerm)) {
+            Logger.recordOutput(toVertex.getName() + "/Score", Double.POSITIVE_INFINITY);
             return Double.POSITIVE_INFINITY;
-        } else {
-            cachedTimeTerm = timeTerm;
-            System.out.println("cache updated");
         }
+
+        cachedTimeTerm = timeTerm;
+
         double pointTerm = Constants.k2 * toVertex.getExpectedPoints();
-        double miscTerm = (Helpers.getRobotScore() + toVertex.getExpectedRP()
-                + toVertex.pointAdjust(Helpers.getMatchTime())) / Constants.k3;
+        double miscTerm = (Helpers.getRobotScore() - toVertex.getExpectedRP()
+                - toVertex.pointAdjust(Helpers.getMatchTime())) / Constants.k3;
 
         Logger.recordOutput(toVertex.getName() + "/Time Term", cachedTimeTerm);
+        Logger.recordOutput(toVertex.getName() + "/Point Term", pointTerm);
+        Logger.recordOutput(toVertex.getName() + "/Misc Term", miscTerm);
+        Logger.recordOutput(toVertex.getName() + "/Score", cachedTimeTerm - pointTerm + miscTerm);
         return cachedTimeTerm - pointTerm + miscTerm;
     }
 }
