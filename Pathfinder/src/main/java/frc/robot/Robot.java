@@ -4,12 +4,15 @@
 
 package frc.robot;
 
+import org.littletonrobotics.junction.LoggedRobot;
+import org.littletonrobotics.junction.Logger;
+import org.littletonrobotics.junction.networktables.NT4Publisher;
+
 import com.pathplanner.lib.commands.PathfindingCommand;
 import com.pathplanner.lib.pathfinding.LocalADStar;
 import com.pathplanner.lib.pathfinding.Pathfinding;
 
 import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.Graph.Helpers;
@@ -19,7 +22,7 @@ import frc.robot.Graph.Helpers;
  * the TimedRobot documentation. If you change the name of this class or the package after creating
  * this project, you must also update the Main.java file in the project.
  */
-public class Robot extends TimedRobot {
+public class Robot extends LoggedRobot {
   private Command m_autonomousCommand;
 
   private final RobotContainer m_robotContainer;
@@ -33,7 +36,9 @@ public class Robot extends TimedRobot {
     // autonomous chooser on the dashboard.
     PathfindingCommand.warmupCommand().schedule();
     Pathfinding.setPathfinder(new LocalADStar());
-    Helpers.initialize(() -> Constants.robotPose);
+    Logger.addDataReceiver(new NT4Publisher());
+    Logger.start();
+    Helpers.initialize(() -> Constants.robotPose, "gameField.json");
     m_robotContainer = new RobotContainer();
   }
 
@@ -51,6 +56,7 @@ public class Robot extends TimedRobot {
     // and running subsystem periodic() methods.  This must be called from the robot's periodic
     // block in order for anything in the Command-based framework to work.
     Constants.time = DriverStation.getMatchTime();
+    Logger.recordOutput("robotPose", Constants.robotPose);
     CommandScheduler.getInstance().run();
   }
 

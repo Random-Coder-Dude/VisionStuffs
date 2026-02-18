@@ -65,9 +65,9 @@ public class RobotContainer {
     // Schedule `exampleMethodCommand` when the Xbox controller's B button is
     // pressed,
     // cancelling on release.
-iVertex v1 = new standardVertex(15, 1, 3, null, new Pose2d(2, 2, new Rotation2d()), 50, 10);
-iVertex v2 = new standardVertex(25, 3, 2, null, new Pose2d(5, 3, new Rotation2d()), 10, 0);
-iVertex v3 = new standardVertex(10, 1, 5, null, new Pose2d(8, 6, new Rotation2d()), 75, 15);
+iVertex v1 = new standardVertex(15, 1, 3, null, new Pose2d(2, 2, new Rotation2d()), 50, 10, "Vertex 1");
+iVertex v2 = new standardVertex(25, 3, 2, null, new Pose2d(5, 3, new Rotation2d()), 10, 0, "Vertex 2");
+iVertex v3 = new standardVertex(10, 1, 5, null, new Pose2d(8, 6, new Rotation2d()), 75, 15, "Vertex 3");
 
     adjMatrix matrix = new adjMatrix(v1, v2, v3);
 

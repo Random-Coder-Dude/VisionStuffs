@@ -1,5 +1,7 @@
 package frc.robot.Graph;
 
+import org.littletonrobotics.junction.Logger;
+
 import frc.robot.Constants;
 
 public class standardEdge implements iEdge {
@@ -48,6 +50,8 @@ public class standardEdge implements iEdge {
         double pointTerm = Constants.k2 * toVertex.getExpectedPoints();
         double miscTerm = (Helpers.getRobotScore() + toVertex.getExpectedRP()
                 + toVertex.pointAdjust(Helpers.getMatchTime())) / Constants.k3;
+
+        Logger.recordOutput(toVertex.getName() + "/Time Term", cachedTimeTerm);
         return cachedTimeTerm - pointTerm + miscTerm;
     }
 }

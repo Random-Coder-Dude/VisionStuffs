@@ -13,4 +13,6 @@ public interface iVertex {
     double getExpectedPoints();
 
     double getExpectedRP();
+
+    String getName();
 }
