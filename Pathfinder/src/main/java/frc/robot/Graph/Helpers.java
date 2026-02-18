@@ -2,9 +2,16 @@ package frc.robot.Graph;
 
 import java.util.*;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
+import org.littletonrobotics.junction.Logger;
 
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.trajectory.Trajectory;
+import edu.wpi.first.math.trajectory.TrajectoryConfig;
+import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Filesystem;
 import frc.robot.Constants;
@@ -27,6 +34,10 @@ public class Helpers {
         List<Translation2d> path = aStarPath(startCell, targetCell);
         if (path.isEmpty())
             return Double.POSITIVE_INFINITY;
+
+        if (Constants.DEBUG_MODE) {
+            logPath(path, vertex);
+        }
 
         double distance = 0.0;
         Translation2d last = path.get(0);
@@ -149,7 +160,6 @@ public class Helpers {
 
         List<Translation2d> path = new ArrayList<>();
         Node n = endNode;
-
         while (n != null) {
             path.add(field.toField(n.r, n.c));
             n = n.parent;
@@ -163,6 +173,20 @@ public class Helpers {
         double dr = r1 - r2;
         double dc = c1 - c2;
         return Math.sqrt(dr * dr + dc * dc);
+    }
+
+    private static void logPath(List<Translation2d> path, iVertex vertex) {
+        List<Pose2d> waypoints = path.stream()
+                .map(t -> new Pose2d(t, new Rotation2d()))
+                .collect(Collectors.toList());
+
+        TrajectoryConfig config = new TrajectoryConfig(
+                Constants.PATH_CONSTRAINTS.maxVelocityMPS(),
+                Constants.PATH_CONSTRAINTS.maxAccelerationMPSSq());
+
+        Trajectory trajectory = TrajectoryGenerator.generateTrajectory(waypoints, config);
+
+        Logger.recordOutput(vertex.getName() + "/Planned/Trajectory", trajectory);
     }
 
     public static double getRobotScore() {
