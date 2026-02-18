@@ -2,12 +2,18 @@ package frc.robot.Graph;
 
 import java.util.*;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
+import edu.wpi.first.math.trajectory.Trajectory;
+import edu.wpi.first.math.trajectory.TrajectoryConfig;
+import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Filesystem;
 import frc.robot.Constants;
+import org.littletonrobotics.junction.Logger;
 
 public class Helpers {
 
@@ -20,8 +26,9 @@ public class Helpers {
     }
 
     /**
-     * Calculates the fastest path time to a target pose considering obstacles
-     * Uses A* on the field grid and trapezoidal motion profiling
+     * Calculates the fastest path time to a target pose considering obstacles.
+     * Uses A* on the field grid and trapezoidal motion profiling.
+     * Logs the trajectory for AdvantageKit visualization.
      */
     public static double getPathTime(Pose2d targetPose) {
         Pose2d startPose = robotPoseSupplier.get();
@@ -32,7 +39,24 @@ public class Helpers {
         if (path.isEmpty())
             return Double.POSITIVE_INFINITY;
 
-        // Compute total path distance
+        // Convert path to Pose2d waypoints for trajectory
+        List<Pose2d> waypoints = path.stream()
+                .map(t -> new Pose2d(t, new Rotation2d()))
+                .collect(Collectors.toList());
+
+        // Trajectory configuration from constants
+        TrajectoryConfig config = new TrajectoryConfig(
+                Constants.PATH_CONSTRAINTS.maxVelocityMPS(),
+                Constants.PATH_CONSTRAINTS.maxAccelerationMPSSq()
+        );
+
+        // Generate trajectory
+        Trajectory trajectory = TrajectoryGenerator.generateTrajectory(waypoints, config);
+
+        // Log trajectory for AdvantageKit
+        Logger.recordOutput("Planned/Trajectory", trajectory);
+
+        // Compute path length manually for trapezoidal motion profiling
         double distance = 0.0;
         Translation2d last = path.get(0);
         for (int i = 1; i < path.size(); i++) {
@@ -40,26 +64,27 @@ public class Helpers {
             last = path.get(i);
         }
 
-        // Trapezoidal motion profile
+        // Trapezoidal motion profile calculation
         double vmax = Constants.PATH_CONSTRAINTS.maxVelocityMPS();
         double amax = Constants.PATH_CONSTRAINTS.maxAccelerationMPSSq();
         double tAccel = vmax / amax;
         double dAccel = 0.5 * amax * tAccel * tAccel;
 
+        double time;
         if (2 * dAccel >= distance) {
             // Triangular profile (never reaches max velocity)
-            System.out.println(2 * Math.sqrt(distance / amax));
-            return 2 * Math.sqrt(distance / amax);
+            time = 2 * Math.sqrt(distance / amax);
         } else {
             // Trapezoidal profile
             double dCruise = distance - 2 * dAccel;
             double tCruise = dCruise / vmax;
-            System.out.println(2 * tAccel + tCruise);
-            return 2 * tAccel + tCruise;
+            time = 2 * tAccel + tCruise;
         }
+
+        return time;
     }
 
-    // Fast A* pathfinding
+    // Fast A* pathfinding on grid
     private static List<Translation2d> aStarPath(int[] startCell, int[] targetCell) {
         int rows = field.getRows();
         int cols = field.getCols();
@@ -77,14 +102,17 @@ public class Helpers {
                 this.parent = parent;
             }
 
+            @Override
             public int compareTo(Node o) {
                 return Double.compare(this.f, o.f);
             }
 
+            @Override
             public boolean equals(Object o) {
                 return o instanceof Node n && n.r == r && n.c == c;
             }
 
+            @Override
             public int hashCode() {
                 return Objects.hash(r, c);
             }
@@ -98,8 +126,10 @@ public class Helpers {
         open.add(startNode);
         gScore.put(startCell[0] + "," + startCell[1], 0.0);
 
-        int[][] neighbors = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 },
-                { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 } };
+        int[][] neighbors = {
+                { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 },
+                { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 }
+        };
 
         Node endNode = null;
         while (!open.isEmpty()) {
@@ -143,10 +173,11 @@ public class Helpers {
             n = n.parent;
         }
         Collections.reverse(path);
+
         return path;
     }
 
-    // Euclidean heuristic for A*
+    // Euclidean heuristic in meters
     private static double heuristic(int[] a, int[] b) {
         Translation2d posA = field.toField(a[0], a[1]);
         Translation2d posB = field.toField(b[0], b[1]);
