@@ -67,7 +67,7 @@ new ModuleConfig(
     ),
     Meters.of(0.55)
 );
-public static final boolean DEBUG_MODE = false;
+public static final boolean DEBUG_MODE = true;
   public static double time = 0.0;
 public static Pose2d robotPose = new Pose2d();
 }

@@ -6,6 +6,7 @@ import java.nio.file.Paths;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.littletonrobotics.junction.Logger;
 
 import edu.wpi.first.math.geometry.Translation2d;
 
@@ -19,7 +20,10 @@ public class FieldGrid {
 
     /** Load grid from JSON file */
     public FieldGrid(String jsonPath) {
+        long start = System.nanoTime();
         loadFromJson(jsonPath);
+        long end = System.nanoTime();
+        Logger.recordOutput("Json Time", ((end-start) / 1e6) + " ms");
     }
 
     /** Load JSON where each row is a string of 0/1 characters */

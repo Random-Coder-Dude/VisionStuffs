@@ -2,16 +2,11 @@ package frc.robot.Graph;
 
 import java.util.*;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.littletonrobotics.junction.Logger;
 
 import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.geometry.Translation2d;
-import edu.wpi.first.math.trajectory.Trajectory;
-import edu.wpi.first.math.trajectory.TrajectoryConfig;
-import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Filesystem;
 import frc.robot.Constants;
@@ -21,33 +16,89 @@ public class Helpers {
     private static Supplier<Pose2d> robotPoseSupplier;
     private static FieldGrid field;
 
+    // Reused arrays (no allocations during A*)
+    private static double[][] gScore;
+    private static boolean[][] closed;
+    private static int[][] parentR;
+    private static int[][] parentC;
+
+    private static final double SQRT2 = 1.41421356237;
+    private static final double OCTILE_FACTOR = SQRT2 - 2.0;
+
+    private static class OpenNode implements Comparable<OpenNode> {
+        int r, c;
+        double f;
+
+        OpenNode(int r, int c, double f) {
+            this.r = r;
+            this.c = c;
+            this.f = f;
+        }
+
+        @Override
+        public int compareTo(OpenNode o) {
+            return Double.compare(this.f, o.f);
+        }
+    }
+
     public static void initialize(Supplier<Pose2d> robotPose, String fieldJson) {
+
         robotPoseSupplier = robotPose;
-        field = new FieldGrid(Filesystem.getDeployDirectory().toPath().resolve(fieldJson).toString());
+
+        field = new FieldGrid(
+                Filesystem.getDeployDirectory()
+                        .toPath()
+                        .resolve(fieldJson)
+                        .toString());
+
+        int rows = field.getRows();
+        int cols = field.getCols();
+
+        gScore = new double[rows][cols];
+        closed = new boolean[rows][cols];
+        parentR = new int[rows][cols];
+        parentC = new int[rows][cols];
     }
 
     public static double getPathTime(Pose2d targetPose, iVertex vertex) {
+
+        long totalStart = System.nanoTime();
+
         Pose2d startPose = robotPoseSupplier.get();
+
         int[] startCell = field.toCell(startPose.getTranslation());
         int[] targetCell = field.toCell(targetPose.getTranslation());
 
-        List<Translation2d> path = aStarPath(startCell, targetCell);
-        if (path.isEmpty())
-            return Double.POSITIVE_INFINITY;
+        long aStarStart = System.nanoTime();
+        List<Translation2d> path =
+                aStarPath(startCell, targetCell, vertex);
+        long aStarEnd = System.nanoTime();
 
-        if (Constants.DEBUG_MODE) {
-            logPath(path, vertex);
+        if (path.isEmpty()) {
+
+            Logger.recordOutput(vertex.getName() + "/A*/Success", false);
+            Logger.recordOutput(vertex.getName() + "/A*/TotalTimeMs",
+                    (System.nanoTime() - totalStart) / 1e6);
+
+            return Double.POSITIVE_INFINITY;
         }
+
+        long distStart = System.nanoTime();
 
         double distance = 0.0;
         Translation2d last = path.get(0);
+
         for (int i = 1; i < path.size(); i++) {
-            distance += last.getDistance(path.get(i));
-            last = path.get(i);
+            Translation2d current = path.get(i);
+            distance += last.getDistance(current);
+            last = current;
         }
+
+        long distEnd = System.nanoTime();
 
         double vmax = Constants.PATH_CONSTRAINTS.maxVelocityMPS();
         double amax = Constants.PATH_CONSTRAINTS.maxAccelerationMPSSq();
+
         double tAccel = vmax / amax;
         double dAccel = 0.5 * amax * tAccel * tAccel;
 
@@ -60,10 +111,36 @@ public class Helpers {
             time = 2 * tAccel + tCruise;
         }
 
+        long totalEnd = System.nanoTime();
+
+        // --- Logging ---
+        Logger.recordOutput(vertex.getName() + "/A*/Success", true);
+        Logger.recordOutput(vertex.getName() + "/A*/AStarTimeMs",
+                (aStarEnd - aStarStart) / 1e6);
+        Logger.recordOutput(vertex.getName() + "/A*/DistanceCalcTimeMs",
+                (distEnd - distStart) / 1e6);
+        Logger.recordOutput(vertex.getName() + "/A*/TotalTimeMs",
+                (totalEnd - totalStart) / 1e6);
+        Logger.recordOutput(vertex.getName() + "/A*/DistanceMeters", distance);
+        Logger.recordOutput(vertex.getName() + "/A*/EstimatedTravelTimeSec", time);
+        Logger.recordOutput(vertex.getName() + "/A*/PathLengthNodes", path.size());
+
+        
+        if (Constants.DEBUG_MODE) {
+        long visualizationStart = System.nanoTime();
+        logPath(path, vertex);
+        long visualizationEnd = System.nanoTime();
+        Logger.recordOutput(vertex.getName() + "/A*/Visualize", (visualizationEnd - visualizationStart) / 1e6);
+        }
+
         return time;
     }
 
-    private static List<Translation2d> aStarPath(int[] startCell, int[] targetCell) {
+    private static List<Translation2d> aStarPath(
+            int[] startCell,
+            int[] targetCell,
+            iVertex vertex) {
+
         final int rows = field.getRows();
         final int cols = field.getCols();
 
@@ -72,63 +149,47 @@ public class Helpers {
         final int targetR = targetCell[0];
         final int targetC = targetCell[1];
 
-        class Node implements Comparable<Node> {
-            int r, c;
-            double g, f;
-            Node parent;
+        PriorityQueue<OpenNode> open = new PriorityQueue<>();
 
-            Node(int r, int c, double g, double f, Node parent) {
-                this.r = r;
-                this.c = c;
-                this.g = g;
-                this.f = f;
-                this.parent = parent;
-            }
+        int nodesExpanded = 0;
+        int nodesPushed = 0;
 
-            @Override
-            public int compareTo(Node o) {
-                return Double.compare(this.f, o.f);
-            }
-        }
-
-        PriorityQueue<Node> open = new PriorityQueue<>();
-        boolean[][] closed = new boolean[rows][cols];
-
-        double[][] gScore = new double[rows][cols];
         for (int r = 0; r < rows; r++) {
             Arrays.fill(gScore[r], Double.POSITIVE_INFINITY);
+            Arrays.fill(closed[r], false);
         }
 
         gScore[startR][startC] = 0.0;
+        parentR[startR][startC] = -1;
+        parentC[startR][startC] = -1;
 
-        open.add(new Node(
+        open.add(new OpenNode(
                 startR,
                 startC,
-                0.0,
-                heuristic(startR, startC, targetR, targetC),
-                null));
+                heuristic(startR, startC, targetR, targetC)));
+        nodesPushed++;
 
         final int[][] neighbors = {
                 { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 },
                 { -1, -1 }, { -1, 1 }, { 1, -1 }, { 1, 1 }
         };
 
-        Node endNode = null;
-
         while (!open.isEmpty()) {
-            Node current = open.poll();
+
+            OpenNode current = open.poll();
 
             if (closed[current.r][current.c])
                 continue;
 
-            if (current.r == targetR && current.c == targetC) {
-                endNode = current;
+            nodesExpanded++;
+
+            if (current.r == targetR && current.c == targetC)
                 break;
-            }
 
             closed[current.r][current.c] = true;
 
             for (int[] d : neighbors) {
+
                 int nr = current.r + d[0];
                 int nc = current.c + d[1];
 
@@ -141,28 +202,44 @@ public class Helpers {
                 if (closed[nr][nc])
                     continue;
 
-                double moveCost = (d[0] != 0 && d[1] != 0) ? Math.sqrt(2) : 1.0;
-                double gNew = current.g + moveCost;
+                double moveCost =
+                        (d[0] != 0 && d[1] != 0) ? SQRT2 : 1.0;
+
+                double gNew =
+                        gScore[current.r][current.c] + moveCost;
 
                 if (gNew >= gScore[nr][nc])
                     continue;
 
                 gScore[nr][nc] = gNew;
+                parentR[nr][nc] = current.r;
+                parentC[nr][nc] = current.c;
 
-                double fNew = gNew + heuristic(nr, nc, targetR, targetC);
+                double fNew =
+                        gNew + heuristic(nr, nc, targetR, targetC);
 
-                open.add(new Node(nr, nc, gNew, fNew, current));
+                open.add(new OpenNode(nr, nc, fNew));
+                nodesPushed++;
             }
         }
 
-        if (endNode == null)
+        Logger.recordOutput(vertex.getName() + "/A*/NodesExpanded", nodesExpanded);
+        Logger.recordOutput(vertex.getName() + "/A*/NodesPushed", nodesPushed);
+
+        if (gScore[targetR][targetC] == Double.POSITIVE_INFINITY)
             return Collections.emptyList();
 
         List<Translation2d> path = new ArrayList<>();
-        Node n = endNode;
-        while (n != null) {
-            path.add(field.toField(n.r, n.c));
-            n = n.parent;
+
+        int r = targetR;
+        int c = targetC;
+
+        while (r != -1) {
+            path.add(field.toField(r, c));
+            int pr = parentR[r][c];
+            int pc = parentC[r][c];
+            r = pr;
+            c = pc;
         }
 
         Collections.reverse(path);
@@ -170,24 +247,39 @@ public class Helpers {
     }
 
     private static double heuristic(int r1, int c1, int r2, int c2) {
-        double dr = r1 - r2;
-        double dc = c1 - c2;
-        return Math.sqrt(dr * dr + dc * dc);
+        int dx = Math.abs(r1 - r2);
+        int dy = Math.abs(c1 - c2);
+        return (dx + dy) + OCTILE_FACTOR * Math.min(dx, dy);
     }
 
-    private static void logPath(List<Translation2d> path, iVertex vertex) {
-        List<Pose2d> waypoints = path.stream()
-                .map(t -> new Pose2d(t, new Rotation2d()))
-                .collect(Collectors.toList());
+private static void logPath(List<Translation2d> path, iVertex vertex) {
+    if (path.isEmpty()) return;
 
-        TrajectoryConfig config = new TrajectoryConfig(
-                Constants.PATH_CONSTRAINTS.maxVelocityMPS(),
-                Constants.PATH_CONSTRAINTS.maxAccelerationMPSSq());
+    int nPoints = 10; // number of points to log
+    nPoints = Math.min(nPoints, path.size()); // don't request more than we have
+    nPoints = Math.max(nPoints, 1); // at least 1 point
 
-        Trajectory trajectory = TrajectoryGenerator.generateTrajectory(waypoints, config);
+    double[] flattened = new double[nPoints * 2]; // x0,y0,x1,y1,...
 
-        Logger.recordOutput(vertex.getName() + "/Planned/Trajectory", trajectory);
+    if (nPoints == 1) {
+        // just log the first point
+        Translation2d t = path.get(0);
+        flattened[0] = t.getX();
+        flattened[1] = t.getY();
+    } else {
+        // evenly pick points along the path
+        for (int i = 0; i < nPoints; i++) {
+            int idx = i * (path.size() - 1) / (nPoints - 1);
+            Translation2d t = path.get(idx);
+            flattened[i * 2] = t.getX();
+            flattened[i * 2 + 1] = t.getY();
+        }
     }
+
+    // log as a flattened array
+    Logger.recordOutput(vertex.getName() + "/AStarPathFlattened", flattened);
+}
+
 
     public static double getRobotScore() {
         return 0.0;
@@ -195,6 +287,8 @@ public class Helpers {
 
     public static double getMatchTime() {
         double timeLeft = Math.max(0, DriverStation.getMatchTime());
-        return DriverStation.isAutonomous() ? timeLeft + 135 : timeLeft;
+        return DriverStation.isAutonomous()
+                ? timeLeft + 135
+                : timeLeft;
     }
 }
