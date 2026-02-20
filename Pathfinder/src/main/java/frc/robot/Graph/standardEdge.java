@@ -48,7 +48,7 @@ public class standardEdge implements iEdge {
         cachedTimeTerm = timeTerm;
 
         double pointTerm = Constants.k2 * toVertex.getExpectedPoints();
-        double miscTerm = (Helpers.getRobotScore() - toVertex.getExpectedRP()
+        double miscTerm = (Helpers.getRobotScore(toVertex.getName()) - toVertex.getExpectedRP()
                 - toVertex.pointAdjust(Helpers.getMatchTime())) / Constants.k3;
 
         Logger.recordOutput(toVertex.getName() + "/Time Term", cachedTimeTerm);

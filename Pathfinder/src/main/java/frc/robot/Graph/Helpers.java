@@ -16,6 +16,7 @@ public class Helpers {
     private static Supplier<Pose2d> robotPoseSupplier;
     private static FieldGrid field;
     private static Supplier<List<Pose2d>> opposingRobotsSupplier;
+    private static Map<String, List<Translation2d>> pathCache = new HashMap<>();
 
     private static double[][] gScore;
     private static boolean[][] closed;
@@ -74,6 +75,8 @@ public class Helpers {
         long aStarStart = System.nanoTime();
         List<Translation2d> path = aStarPath(startCell, targetCell, vertex);
         long aStarEnd = System.nanoTime();
+
+        pathCache.put(vertex.getName(), path);
 
         if (path.isEmpty()) {
 
@@ -298,7 +301,28 @@ public class Helpers {
                 : timeLeft;
     }
 
-    public static double getRobotScore() {
-        return 0.0;
+    public static double getRobotScore(String vertexName) {
+        List<Translation2d> path = pathCache.get(vertexName);
+
+        if (path == null || path.isEmpty())
+            return 0.0;
+
+        List<Pose2d> robots = opposingRobotsSupplier.get();
+
+        double totalScore = 0.0;
+
+        for (Pose2d enemyRobot : robots) {
+            double minDistance = Double.POSITIVE_INFINITY;
+
+            for (Translation2d pathPoint : path) {
+                double dist = pathPoint.getDistance(enemyRobot.getTranslation());
+                minDistance = Math.min(minDistance, dist);
+            }
+
+            totalScore += Math.exp(-minDistance);
+        }
+
+        return totalScore;
     }
+
 }
