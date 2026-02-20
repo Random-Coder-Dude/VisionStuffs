@@ -4,6 +4,8 @@
 
 package frc.robot;
 
+import java.util.List;
+
 import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.NT4Publisher;
@@ -34,6 +36,12 @@ public class Robot extends LoggedRobot {
 
   private final RobotContainer m_robotContainer;
 
+  private final iVertex v1 = new standardVertex(0, 1, 0, null, new Pose2d(0, 6, new Rotation2d()), 50, 0, "Shoot");
+  private final iVertex v2 = new standardVertex(0, 1, 0, null, new Pose2d(5, 3, new Rotation2d()), 10, 0, "Climb");
+  private final iVertex v3 = new standardVertex(0, 1, 0, null, new Pose2d(8, 6, new Rotation2d()), 0, 0, "Defense");
+  
+  private final adjMatrix matrix;
+
   /**
    * This function is run when the robot is first started up and should be used
    * for any
@@ -43,12 +51,19 @@ public class Robot extends LoggedRobot {
     // Instantiate our RobotContainer. This will perform all our button bindings,
     // and put our
     // autonomous chooser on the dashboard.
-    PathfindingCommand.warmupCommand().schedule();
-    Pathfinding.setPathfinder(new LocalADStar());
     Logger.addDataReceiver(new NT4Publisher());
     Logger.start();
-    Helpers.initialize(() -> Constants.robotPose, "gameField.json");
+    Pose2d robot1 = new Pose2d(1.65, 3.7, Rotation2d.fromDegrees(90));
+    Pose2d robot2 = new Pose2d(4.6, 5.6, Rotation2d.fromDegrees(-45));
+    Logger.recordOutput("Robot 1", robot1);
+    Logger.recordOutput("Robot 2", robot2);
+    PathfindingCommand.warmupCommand().schedule();
+    Pathfinding.setPathfinder(new LocalADStar());
+
+    Helpers.initialize(() -> Constants.robotPose, "gameField.json", () -> List.of(robot1, robot2));
+    matrix = new adjMatrix(v1, v2, v3);
     m_robotContainer = new RobotContainer();
+    
   }
 
   /**
@@ -72,12 +87,7 @@ public class Robot extends LoggedRobot {
     // block in order for anything in the Command-based framework to work.
     Constants.time = DriverStation.getMatchTime();
     Logger.recordOutput("robotPose", Constants.robotPose);
-    iVertex v1 = new standardVertex(0, 1, 0, null, new Pose2d(0, 6, new Rotation2d()), 50, 0, "Shoot");
-    iVertex v2 = new standardVertex(0, 1, 0, null, new Pose2d(5, 3, new Rotation2d()), 10, 0, "Climb");
-    iVertex v3 = new standardVertex(0, 1, 0, null, new Pose2d(8, 6, new Rotation2d()), 0, 0, "Defense");
-
-    adjMatrix matrix = new adjMatrix(v1, v2, v3);
-
+    Helpers.updateBotPosistions();
     matrix.updateWeights();
     CommandScheduler.getInstance().run();
   }

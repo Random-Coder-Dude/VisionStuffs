@@ -15,8 +15,8 @@ public class Helpers {
 
     private static Supplier<Pose2d> robotPoseSupplier;
     private static FieldGrid field;
+    private static Supplier<List<Pose2d>> opposingRobotsSupplier;
 
-    // Reused arrays (no allocations during A*)
     private static double[][] gScore;
     private static boolean[][] closed;
     private static int[][] parentR;
@@ -41,7 +41,7 @@ public class Helpers {
         }
     }
 
-    public static void initialize(Supplier<Pose2d> robotPose, String fieldJson) {
+    public static void initialize(Supplier<Pose2d> robotPose, String fieldJson, Supplier<List<Pose2d>> opposingRobots) {
 
         robotPoseSupplier = robotPose;
 
@@ -50,6 +50,8 @@ public class Helpers {
                         .toPath()
                         .resolve(fieldJson)
                         .toString());
+
+        opposingRobotsSupplier = opposingRobots;
 
         int rows = field.getRows();
         int cols = field.getCols();
@@ -70,8 +72,7 @@ public class Helpers {
         int[] targetCell = field.toCell(targetPose.getTranslation());
 
         long aStarStart = System.nanoTime();
-        List<Translation2d> path =
-                aStarPath(startCell, targetCell, vertex);
+        List<Translation2d> path = aStarPath(startCell, targetCell, vertex);
         long aStarEnd = System.nanoTime();
 
         if (path.isEmpty()) {
@@ -125,12 +126,11 @@ public class Helpers {
         Logger.recordOutput(vertex.getName() + "/A*/EstimatedTravelTimeSec", time);
         Logger.recordOutput(vertex.getName() + "/A*/PathLengthNodes", path.size());
 
-        
         if (Constants.DEBUG_MODE) {
-        long visualizationStart = System.nanoTime();
-        logPath(path, vertex);
-        long visualizationEnd = System.nanoTime();
-        Logger.recordOutput(vertex.getName() + "/A*/Visualize", (visualizationEnd - visualizationStart) / 1e6);
+            long visualizationStart = System.nanoTime();
+            logPath(path, vertex);
+            long visualizationEnd = System.nanoTime();
+            Logger.recordOutput(vertex.getName() + "/A*/Visualize", (visualizationEnd - visualizationStart) / 1e6);
         }
 
         return time;
@@ -202,11 +202,9 @@ public class Helpers {
                 if (closed[nr][nc])
                     continue;
 
-                double moveCost =
-                        (d[0] != 0 && d[1] != 0) ? SQRT2 : 1.0;
+                double moveCost = (d[0] != 0 && d[1] != 0) ? SQRT2 : 1.0;
 
-                double gNew =
-                        gScore[current.r][current.c] + moveCost;
+                double gNew = gScore[current.r][current.c] + moveCost;
 
                 if (gNew >= gScore[nr][nc])
                     continue;
@@ -215,8 +213,7 @@ public class Helpers {
                 parentR[nr][nc] = current.r;
                 parentC[nr][nc] = current.c;
 
-                double fNew =
-                        gNew + heuristic(nr, nc, targetR, targetC);
+                double fNew = gNew + heuristic(nr, nc, targetR, targetC);
 
                 open.add(new OpenNode(nr, nc, fNew));
                 nodesPushed++;
@@ -252,37 +249,46 @@ public class Helpers {
         return (dx + dy) + OCTILE_FACTOR * Math.min(dx, dy);
     }
 
-private static void logPath(List<Translation2d> path, iVertex vertex) {
-    if (path.isEmpty()) return;
+    private static void logPath(List<Translation2d> path, iVertex vertex) {
+        if (path.isEmpty())
+            return;
 
-    int nPoints = 10; // number of points to log
-    nPoints = Math.min(nPoints, path.size()); // don't request more than we have
-    nPoints = Math.max(nPoints, 1); // at least 1 point
+        int nPoints = 50;
+        nPoints = Math.min(nPoints, path.size());
+        nPoints = Math.max(nPoints, 1);
 
-    double[] flattened = new double[nPoints * 2]; // x0,y0,x1,y1,...
+        double[] flattened = new double[nPoints * 2];
 
-    if (nPoints == 1) {
-        // just log the first point
-        Translation2d t = path.get(0);
-        flattened[0] = t.getX();
-        flattened[1] = t.getY();
-    } else {
-        // evenly pick points along the path
-        for (int i = 0; i < nPoints; i++) {
-            int idx = i * (path.size() - 1) / (nPoints - 1);
-            Translation2d t = path.get(idx);
-            flattened[i * 2] = t.getX();
-            flattened[i * 2 + 1] = t.getY();
+        if (nPoints == 1) {
+            Translation2d t = path.get(0);
+            flattened[0] = t.getX();
+            flattened[1] = t.getY();
+        } else {
+            for (int i = 0; i < nPoints; i++) {
+                int idx = i * (path.size() - 1) / (nPoints - 1);
+                Translation2d t = path.get(idx);
+                flattened[i * 2] = t.getX();
+                flattened[i * 2 + 1] = t.getY();
+            }
         }
+
+        Logger.recordOutput(vertex.getName() + "/AStarPathFlattened", flattened);
     }
 
-    // log as a flattened array
-    Logger.recordOutput(vertex.getName() + "/AStarPathFlattened", flattened);
-}
+    public static void updateBotPosistions() {
+        List<Pose2d> robots = opposingRobotsSupplier.get();
 
+        for (Pose2d robot : robots) {
+            int[] center = field.toCell(robot.getTranslation());
+            int centerR = center[0];
+            int centerC = center[1];
 
-    public static double getRobotScore() {
-        return 0.0;
+            for (int dr = -Constants.robotBlockRadius; dr <= Constants.robotBlockRadius; dr++) {
+                for (int dc = -Constants.robotBlockRadius; dc <= Constants.robotBlockRadius; dc++) {
+                    field.setPassable(centerR + dr, centerC + dc, false);
+                }
+            }
+        }
     }
 
     public static double getMatchTime() {
@@ -290,5 +296,9 @@ private static void logPath(List<Translation2d> path, iVertex vertex) {
         return DriverStation.isAutonomous()
                 ? timeLeft + 135
                 : timeLeft;
+    }
+
+    public static double getRobotScore() {
+        return 0.0;
     }
 }

@@ -47,27 +47,27 @@ public final class Constants {
   public static final double k3 = 1;
   private static final LinearVelocity MAX_VELOCITY_MPS = MetersPerSecond.of(4.5);
   private static final LinearAcceleration MAX_ACCELERATION_MPS_SQUARED = MetersPerSecondPerSecond.of(3.0);
-  private static final AngularVelocity MAX_ANGULAR_VELOCITY_RAD_PER_SEC = RadiansPerSecond.of(Math.PI*2);
-  private static final AngularAcceleration MAX_ANGULAR_ACCELERATION_RAD_PER_SEC_SQUARED = RadiansPerSecondPerSecond.of(4*Math.PI);
+  private static final AngularVelocity MAX_ANGULAR_VELOCITY_RAD_PER_SEC = RadiansPerSecond.of(Math.PI * 2);
+  private static final AngularAcceleration MAX_ANGULAR_ACCELERATION_RAD_PER_SEC_SQUARED = RadiansPerSecondPerSecond
+      .of(4 * Math.PI);
   public static final PathConstraints PATH_CONSTRAINTS = new PathConstraints(
       MAX_VELOCITY_MPS,
       MAX_ACCELERATION_MPS_SQUARED,
       MAX_ANGULAR_VELOCITY_RAD_PER_SEC,
       MAX_ANGULAR_ACCELERATION_RAD_PER_SEC_SQUARED);
-public static final RobotConfig ROBOT_CONFIG = new RobotConfig(
-    Mass.ofBaseUnits(54, Kilograms),        // robot mass (54kg is typical)
-    MomentOfInertia.ofBaseUnits(6, KilogramSquareMeters), // MOI (5-8 typical)
-new ModuleConfig(
-        0.0508,  // wheel radius meters
-        4.5,     // max drive velocity m/s
-        1.0,     // wheel COF
-        DCMotor.getKrakenX60(1),
-        40.0,    // current limit amps
-        1        // motors per module
-    ),
-    Meters.of(0.55)
-);
-public static final boolean DEBUG_MODE = true;
+  public static final RobotConfig ROBOT_CONFIG = new RobotConfig(
+      Mass.ofBaseUnits(54, Kilograms),
+      MomentOfInertia.ofBaseUnits(6, KilogramSquareMeters),
+      new ModuleConfig(
+          0.0508,
+          4.5,
+          1.0,
+          DCMotor.getKrakenX60(1),
+          40.0,
+          1),
+      Meters.of(0.55));
+  public static final boolean DEBUG_MODE = true;
   public static double time = 0.0;
-public static Pose2d robotPose = new Pose2d();
+  public static Pose2d robotPose = new Pose2d();
+  public static int robotBlockRadius = 3;
 }

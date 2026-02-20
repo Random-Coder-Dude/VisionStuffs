@@ -1,6 +1,5 @@
 package frc.robot.Graph;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -9,6 +8,7 @@ public class adjMatrix {
     private iVertex[] vertices;
     private iEdge[][] edges;
     private double[][] weights;
+    private Map<iVertex, Integer> vertexIndexMap;
 
     public adjMatrix(iVertex... vertices) {
         this.vertices = vertices;
@@ -16,6 +16,11 @@ public class adjMatrix {
         int n = vertices.length;
         edges = new iEdge[n][n];
         weights = new double[n][n];
+
+        vertexIndexMap = new HashMap<>();
+        for (int i = 0; i < n; i++) {
+            vertexIndexMap.put(vertices[i], i);
+        }
 
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < n; j++) {
@@ -35,9 +40,9 @@ public class adjMatrix {
     }
 
     public iEdge getEdge(iVertex from, iVertex to) {
-        int fromIndex = Arrays.asList(vertices).indexOf(from);
-        int toIndex = Arrays.asList(vertices).indexOf(to);
-        if (fromIndex == -1 || toIndex == -1)
+        Integer fromIndex = vertexIndexMap.get(from);
+        Integer toIndex = vertexIndexMap.get(to);
+        if (fromIndex == null || toIndex == null)
             return null;
         return edges[fromIndex][toIndex];
     }
@@ -58,10 +63,10 @@ public class adjMatrix {
     }
 
     public double getWeight(iVertex from, iVertex to) {
-        int fromIndex = Arrays.asList(vertices).indexOf(from);
-        int toIndex = Arrays.asList(vertices).indexOf(to);
+        Integer fromIndex = vertexIndexMap.get(from);
+        Integer toIndex = vertexIndexMap.get(to);
 
-        if (fromIndex == -1 || toIndex == -1) {
+        if (fromIndex == null || toIndex == null) {
             return Double.POSITIVE_INFINITY;
         }
 
