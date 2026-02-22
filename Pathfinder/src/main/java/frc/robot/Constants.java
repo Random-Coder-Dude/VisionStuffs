@@ -17,6 +17,7 @@ import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.path.PathConstraints;
 
 import edu.wpi.first.math.geometry.Pose2d;
+import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.system.plant.DCMotor;
 import edu.wpi.first.units.measure.AngularAcceleration;
 import edu.wpi.first.units.measure.AngularVelocity;
@@ -72,4 +73,5 @@ public static final int numSteps = 3;
   public static Pose2d robotPose = new Pose2d();
   public static int robotBlockRadius = 3;
 public static double arrivalThreshold = 0.01;
+  public static Pose2d robot1 = new Pose2d(1.65, 3.7, Rotation2d.fromDegrees(0));
 }
