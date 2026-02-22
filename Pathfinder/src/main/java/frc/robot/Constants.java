@@ -67,7 +67,9 @@ public final class Constants {
           1),
       Meters.of(0.55));
   public static final boolean DEBUG_MODE = true;
+public static final int numSteps = 3;
   public static double time = 0.0;
   public static Pose2d robotPose = new Pose2d();
   public static int robotBlockRadius = 3;
+public static double arrivalThreshold = 0.01;
 }

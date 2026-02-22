@@ -12,18 +12,15 @@ public class PathFinder {
             return Collections.emptyList();
         }
 
-        // DP: dp[step][vertex] = (bestScore, previousVertex)
         double[][] dp = new double[numSteps + 1][vertices.length];
         int[][] parent = new int[numSteps + 1][vertices.length];
         
-        // Initialize: all states start at negative infinity except start vertex at step 0
         for (int step = 0; step <= numSteps; step++) {
             Arrays.fill(dp[step], Double.POSITIVE_INFINITY);
             Arrays.fill(parent[step], -1);
         }
         dp[0][startIndex] = 0.0;
 
-        // Fill DP table
         for (int step = 0; step < numSteps; step++) {
             for (int from = 0; from < vertices.length; from++) {
                 if (dp[step][from] == Double.POSITIVE_INFINITY) continue;
@@ -43,7 +40,6 @@ public class PathFinder {
             }
         }
 
-        // Find best ending vertex at step numSteps
         double bestScore = Double.POSITIVE_INFINITY;
         int bestEndVertex = -1;
         
@@ -58,15 +54,14 @@ public class PathFinder {
             return Collections.emptyList();
         }
 
-        // Reconstruct path
         List<iVertex> path = new ArrayList<>();
         int current = bestEndVertex;
         
-        for (int step = numSteps; step >= 0; step--) {
+        for (int step = numSteps; step > 0; step--) {
             path.add(vertices[current]);
             current = parent[step][current];
-            if (current == -1) break;
         }
+        path.add(vertices[current]); // start vertex
 
         Collections.reverse(path);
         return path;

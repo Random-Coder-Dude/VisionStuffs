@@ -4,12 +4,15 @@ import java.util.List;
 
 import org.littletonrobotics.junction.Logger;
 
+import com.pathplanner.lib.auto.AutoBuilder;
+
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.Command;
 import frc.robot.Constants;
 import frc.robot.Graph.Helpers;
+import frc.robot.Graph.PathFinder;
 import frc.robot.Graph.adjMatrix;
 import frc.robot.Graph.iVertex;
 import frc.robot.Graph.standardVertex;
@@ -20,9 +23,12 @@ public class DefaultCommand extends Command {
     private iVertex v1;
     private iVertex v2;
     private iVertex v3;
+    private iVertex currentVertex;
+    private iVertex currentlyScheduledVertex;
     private Pose2d robot1;
     private Pose2d robot2;
     private adjMatrix matrix;
+    private Command activeCommand;
 
     public DefaultCommand(ExampleSubsystem m_exampleSubsystem) {
         v1 = new standardVertex(0, 1, 0, null, new Pose2d(0, 6, new Rotation2d()), 50, 0,
@@ -34,6 +40,9 @@ public class DefaultCommand extends Command {
         robot1 = new Pose2d(1.65, 3.7, Rotation2d.fromDegrees(90));
         robot2 = new Pose2d(4.6, 5.6, Rotation2d.fromDegrees(-45));
         matrix = new adjMatrix(v1, v2, v3);
+        currentVertex = v1;
+        currentlyScheduledVertex = null;
+        activeCommand = null;
 
         addRequirements(m_exampleSubsystem);
     }
@@ -47,11 +56,28 @@ public class DefaultCommand extends Command {
 
     @Override
     public void execute() {
+        if (activeCommand != null && activeCommand.isScheduled()) {return;}
         Constants.time = DriverStation.getMatchTime();
         Logger.recordOutput("robotPose", Constants.robotPose);
         Helpers.clearCachedPaths();
         Helpers.updateBotPosistions();
         matrix.updateWeights();
+
+        List<iVertex> fullPath = PathFinder.findBestPath(matrix, currentVertex, Constants.numSteps);
+        iVertex next = fullPath.get(1);
+        if (next.getTargetPose().getTranslation()
+                .getDistance(Constants.robotPose.getTranslation()) < Constants.arrivalThreshold) {
+            currentVertex = next;
+            activeCommand = currentVertex.getRunCommand();
+            activeCommand.schedule();
+            return;
+        }
+
+        if (currentlyScheduledVertex != next) {
+            currentlyScheduledVertex = next;
+            activeCommand = AutoBuilder.pathfindToPose(next.getTargetPose(), Constants.PATH_CONSTRAINTS);
+            activeCommand.schedule();
+        }
     }
 
     @Override
