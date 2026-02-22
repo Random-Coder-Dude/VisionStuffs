@@ -64,6 +64,7 @@ public class DefaultCommand extends Command {
         matrix.updateWeights();
 
         List<iVertex> fullPath = PathFinder.findBestPath(matrix, currentVertex, Constants.numSteps);
+        if (fullPath.size() < 2) {return;}
         iVertex next = fullPath.get(1);
         if (next.getTargetPose().getTranslation()
                 .getDistance(Constants.robotPose.getTranslation()) < Constants.arrivalThreshold) {
