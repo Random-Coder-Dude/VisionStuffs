@@ -301,6 +301,10 @@ public class Helpers {
                 : timeLeft;
     }
 
+    public static void clearCachedPaths() {
+        pathCache.clear();
+    }
+
     public static double getRobotScore(String vertexName) {
         List<Translation2d> path = pathCache.get(vertexName);
 

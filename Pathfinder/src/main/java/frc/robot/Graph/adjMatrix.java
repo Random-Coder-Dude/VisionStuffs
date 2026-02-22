@@ -29,7 +29,7 @@ public class adjMatrix {
                     weights[i][j] = Double.POSITIVE_INFINITY;
                 } else {
                     edges[i][j] = new standardEdge(vertices[i], vertices[j]);
-                    weights[i][j] = edges[i][j].getWeight();
+                    weights[i][j] = Double.POSITIVE_INFINITY;
                 }
             }
         }
