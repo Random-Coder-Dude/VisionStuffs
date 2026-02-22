@@ -11,6 +11,8 @@ import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
+import edu.wpi.first.wpilibj2.command.WaitCommand;
 import frc.robot.Constants;
 import frc.robot.Graph.Helpers;
 import frc.robot.Graph.PathFinder;
@@ -32,7 +34,9 @@ public class DefaultCommand extends Command {
     private Command activeCommand;
 
     public DefaultCommand(ExampleSubsystem m_exampleSubsystem) {
-        v1 = new standardVertex(0, 1, 0, new InstantCommand(() -> System.out.println("Shoot Vertex Ran")),
+        v1 = new standardVertex(0, 1, 0, new SequentialCommandGroup(
+                new InstantCommand(() -> System.out.println("Shoot Vertex Ran")),
+                new WaitCommand(0.5)),
                 new Pose2d(0, 6, new Rotation2d()), 50, 0,
                 "Shoot");
         v2 = new standardVertex(0, 1, 0, new InstantCommand(() -> System.out.println("Climb Vertex Ran")),
@@ -60,7 +64,7 @@ public class DefaultCommand extends Command {
 
     @Override
     public void execute() {
-        if (activeCommand != null && !activeCommand.isFinished()) {
+        if (activeCommand != null && !activeCommand.isScheduled()) {
             System.out.println("Skipping");
             return;
         }
