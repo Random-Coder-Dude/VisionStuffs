@@ -64,28 +64,28 @@ public class RobotContainer {
     double moveIncrement = 0.05;
     m_driverController.povUp().whileTrue(
         new RunCommand(() -> {
-          Constants.robotPose = Constants.robotPose.plus(
+          Constants.robot1 = Constants.robot1.plus(
               new Transform2d(new Translation2d(0, moveIncrement), new Rotation2d(0)));
         }));
 
     // Move down
     m_driverController.povDown().whileTrue(
         new RunCommand(() -> {
-          Constants.robotPose = Constants.robotPose.plus(
+          Constants.robot1 = Constants.robot1.plus(
               new Transform2d(new Translation2d(0, -moveIncrement), new Rotation2d(0)));
         }));
 
     // Move right
     m_driverController.povRight().whileTrue(
         new RunCommand(() -> {
-          Constants.robotPose = Constants.robotPose.plus(
+          Constants.robot1 = Constants.robot1.plus(
               new Transform2d(new Translation2d(moveIncrement, 0), new Rotation2d(0)));
         }));
 
     // Move left
     m_driverController.povLeft().whileTrue(
         new RunCommand(() -> {
-          Constants.robotPose = Constants.robotPose.plus(
+          Constants.robot1 = Constants.robot1.plus(
               new Transform2d(new Translation2d(-moveIncrement, 0), new Rotation2d(0)));
         }));
 

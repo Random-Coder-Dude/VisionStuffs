@@ -8,10 +8,6 @@ import org.littletonrobotics.junction.LoggedRobot;
 import org.littletonrobotics.junction.Logger;
 import org.littletonrobotics.junction.networktables.NT4Publisher;
 
-import com.pathplanner.lib.commands.PathfindingCommand;
-import com.pathplanner.lib.pathfinding.LocalADStar;
-import com.pathplanner.lib.pathfinding.Pathfinding;
-
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 
@@ -38,8 +34,6 @@ public class Robot extends LoggedRobot {
     // autonomous chooser on the dashboard.
     Logger.addDataReceiver(new NT4Publisher());
     Logger.start();
-    PathfindingCommand.warmupCommand().schedule();
-    Pathfinding.setPathfinder(new LocalADStar());
     m_robotContainer = new RobotContainer();
     
   }

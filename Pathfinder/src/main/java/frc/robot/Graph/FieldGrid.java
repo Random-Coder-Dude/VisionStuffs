@@ -13,6 +13,7 @@ import edu.wpi.first.math.geometry.Translation2d;
 public class FieldGrid {
 
     private boolean[][] grid;
+    private boolean[][] originalGrid;
     private double fieldWidth;
     private double fieldHeight;
     private int rows;
@@ -21,6 +22,9 @@ public class FieldGrid {
     public FieldGrid(String jsonPath) {
         long start = System.nanoTime();
         loadFromJson(jsonPath);
+        originalGrid = new boolean[rows][cols];
+        for (int r = 0; r < rows; r++)
+            originalGrid[r] = grid[r].clone();
         long end = System.nanoTime();
         Logger.recordOutput("Json Time", ((end - start) / 1e6) + " ms");
     }
@@ -114,6 +118,11 @@ public class FieldGrid {
 
     public boolean[][] getGrid() {
         return grid;
+    }
+
+    public void resetGrid() {
+        for (int r = 0; r < rows; r++)
+            grid[r] = originalGrid[r].clone();
     }
 
     public void printGrid() {

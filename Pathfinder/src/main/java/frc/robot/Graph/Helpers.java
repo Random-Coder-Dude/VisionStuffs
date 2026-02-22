@@ -280,6 +280,7 @@ public class Helpers {
 
     public static void updateBotPosistions() {
         List<Pose2d> robots = opposingRobotsSupplier.get();
+        field.resetGrid();
 
         for (Pose2d robot : robots) {
             int[] center = field.toCell(robot.getTranslation());
