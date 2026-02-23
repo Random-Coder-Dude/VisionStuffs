@@ -34,6 +34,7 @@ public class RobotContainer {
   private final CommandXboxController m_driverController = new CommandXboxController(
       OperatorConstants.kDriverControllerPort);
 
+  @SuppressWarnings("all")
   private final DriveSubsystem m_DriveSubsystem = new DriveSubsystem();
 
   /**

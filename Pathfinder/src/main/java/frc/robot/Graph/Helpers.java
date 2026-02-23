@@ -5,6 +5,9 @@ import java.util.function.Supplier;
 
 import org.littletonrobotics.junction.Logger;
 
+import com.pathplanner.lib.pathfinding.Pathfinding;
+
+import edu.wpi.first.math.Pair;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Translation2d;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -282,8 +285,13 @@ public class Helpers {
         List<Pose2d> robots = opposingRobotsSupplier.get();
         field.resetGrid();
 
+        List<Pair<Translation2d, Translation2d>> obstacles = new ArrayList<>();
+        double robotRadius = Constants.robotBlockRadius * field.getCellWidth();
+
         for (Pose2d robot : robots) {
-            int[] center = field.toCell(robot.getTranslation());
+            Translation2d pos = robot.getTranslation();
+
+            int[] center = field.toCell(pos);
             int centerR = center[0];
             int centerC = center[1];
 
@@ -292,7 +300,13 @@ public class Helpers {
                     field.setPassable(centerR + dr, centerC + dc, false);
                 }
             }
+
+            obstacles.add(Pair.of(
+                    pos.minus(new Translation2d(robotRadius, robotRadius)),
+                    pos.plus(new Translation2d(robotRadius, robotRadius))));
         }
+
+        Pathfinding.setDynamicObstacles(obstacles, robotPoseSupplier.get().getTranslation());
     }
 
     public static double getMatchTime() {

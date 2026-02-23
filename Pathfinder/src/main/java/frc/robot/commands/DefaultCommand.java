@@ -36,13 +36,13 @@ public class DefaultCommand extends Command {
         v1 = new standardVertex(0, 1, 0, new SequentialCommandGroup(
                 new InstantCommand(() -> System.out.println("Shoot Vertex Ran")),
                 new WaitCommand(1.5)),
-                new Pose2d(0, 6, new Rotation2d()), 50, 0,
+                () -> new Pose2d(0, 6, new Rotation2d()), () -> 50.0, 0,
                 "Shoot");
         v2 = new standardVertex(0, 1, 0, new InstantCommand(() -> System.out.println("Climb Vertex Ran")),
-                new Pose2d(5, 3, new Rotation2d()), 10, 0,
+                () -> new Pose2d(5, 3, new Rotation2d()), () -> 10.0, 0,
                 "Climb");
         v3 = new standardVertex(0, 1, 0, new InstantCommand(() -> System.out.println("Defense Vertex Ran")),
-                new Pose2d(8, 6, new Rotation2d()), 0, 0,
+                () -> new Pose2d(8, 6, new Rotation2d()), () -> 0.0, 0,
                 "Defense");
         robot2 = new Pose2d(4.6, 5.6, Rotation2d.fromDegrees(-45));
         matrix = new adjMatrix(v1, v2, v3);
