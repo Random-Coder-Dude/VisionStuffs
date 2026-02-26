@@ -7,7 +7,7 @@ import ntcore
 import time
 import random
 
-SERVER_IP = "127.0.0.1"  # Change to your NT4 server IP
+SERVER_IP = "10.0.0.199"  # Change to your NT4 server IP
 
 print(f"🔌 Connecting to NT4 server at {SERVER_IP}...")
 inst = ntcore.NetworkTableInstance.getDefault()
