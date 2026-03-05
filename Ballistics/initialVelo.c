@@ -1,17 +1,14 @@
 #include <stdio.h>
 #include <math.h>
 #include "structs.h"
-#include "Constants.c"
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include "Constants.h"
 
 Vec3 calculateInitialShotForce(int RPM, double Pitch, double Yaw) {
     Pitch = Pitch * M_PI / 180.0;
     Yaw = Yaw * M_PI / 180.0;
 
-    double surfaceSpeed = RPM * (LauncherWheelDiameter/2.0) * (0.1047/12.0);
+    double omega = 2 * M_PI * RPM / 60.0;
+    double surfaceSpeed = omega * (LauncherWheelDiameter/2.0);
     double speedTransfer = 1.0 / (
         2.0
         + ballMass * ((LauncherWheelDiameter/2.0)*(LauncherWheelDiameter/2.0))/MOI

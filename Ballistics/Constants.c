@@ -1,9 +1,7 @@
-#ifndef CONSTANTS
-#define CONSTANTS
-
-double LauncherWheelDiameter = 4.0;
-double ballMass = 0.5;
-double MOI = 10.0;
-double ProjectileDiameter = 5.91;
-
-#endif
+double LauncherWheelDiameter = 4.0 * 0.0254; //m
+double ballMass = 0.2268; //kg
+double MOI = 0.0029264; //kg*m^2
+double ProjectileDiameter = 5.91 * 0.0254; //m
+double gravityForce = -9.81; //m/s^2
+double airDensity = 1.225; //kg/m^3
+double CD = 0.47;
