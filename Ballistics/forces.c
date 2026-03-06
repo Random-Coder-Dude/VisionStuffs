@@ -18,9 +18,20 @@ Vec3 calculateDrag(Vec3 velocity) {
     return drag;
 }
 
+Vec3 calculateMagnus(Vec3 velocity, Vec3 spin) {
+    double radius = ProjectileDiameter / 2.0;
+    double area = M_PI * radius * radius;
+
+    Vec3 cross = crossVec3(spin, velocity);
+    double coeff = 0.5 * airDensity * CL * area * radius;
+    Vec3 magnus = scalarMultVec3(coeff, cross);
+    return magnus;
+}
+
 Vec3 returnForceVector(Vec3 currentVelocity, Vec3 spinVector) {
     Vec3 gravity = calculateGravity();
     Vec3 drag = calculateDrag(currentVelocity);
-    Vec3 result = addVec3(gravity, drag);
+    Vec3 magnus = calculateMagnus(currentVelocity, spinVector);
+    Vec3 result = addVec3(addVec3(gravity, drag), magnus);
     return result;
 }

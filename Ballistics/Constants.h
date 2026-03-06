@@ -12,5 +12,6 @@ extern double ProjectileDiameter;
 extern double gravityForce;
 extern double airDensity;
 extern double CD;
+extern double CL;
 
 #endif

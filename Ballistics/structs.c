@@ -38,8 +38,17 @@ double magnitudeVec3(Vec3 a) {
 
 Vec3 normalizeVec3(Vec3 a) {
     double magnitude = magnitudeVec3(a);
+    if (magnitude == 0.0) return createVec3(0.0, 0.0, 0.0);
     Vec3 result = scalarMultVec3((1/magnitude), a);
     return result;
+}
+
+Vec3 crossVec3(Vec3 a, Vec3 b) {
+    return createVec3(
+        a.y*b.z - a.z*b.y,
+        a.z*b.x - a.x*b.z,
+        a.x*b.y - a.y*b.x
+    );
 }
 
 void printVec3(Vec3 a) {

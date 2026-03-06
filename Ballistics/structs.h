@@ -12,6 +12,7 @@ Vec3 scalarMultVec3(double scalar, Vec3 a);
 Vec3 addVec3(Vec3 a, Vec3 b);
 double magnitudeVec3(Vec3 a);
 Vec3 normalizeVec3(Vec3 a);
+Vec3 crossVec3(Vec3 a, Vec3 b);
 void printVec3(Vec3 a);
 
 #endif

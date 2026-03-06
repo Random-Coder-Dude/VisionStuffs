@@ -16,6 +16,7 @@ Vec3 calculateInitialShotForce(int RPM, double Pitch, double Yaw) {
     );
 
     double velocityMagnitude = surfaceSpeed * speedTransfer;
+    printf("Inital Velocity Magnitude: %f\n", velocityMagnitude);
 
     double xTerm = cos(Pitch) * cos(Yaw);
     double yTerm = cos(Pitch) * sin(Yaw);
