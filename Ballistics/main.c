@@ -1,40 +1,27 @@
 #include <stdio.h>
-#include "initialVelo.h"
-#include "forces.h"
+#include "forwardPass.h"
+#include "structs.h"
 #include "Constants.h"
 
 int main() {
+    // Example robot velocity (vx, vy, omega)
+    ChassisSpeeds robot = createChassisSpeeds(0, 0, 0);
 
-    double rpm = 2000;
-    double pitch = 85;
-    double yaw = 0;
+    // Example shot parameters
+    double rpm = 5000;          // shooter RPM
+    double hoodAngle = 45.0;    // hood angle in degrees
+    double turretAngle = 0.0;   // yaw in degrees
+    double goalZ = 2.0;         // target height in meters
 
-    printf("RPM: %f\n", rpm);
-    printf("Pitch (In degrees): %f\n", pitch);
-    printf("Yaw (In degrees): %f\n", yaw);
+    // Calculate trajectory
+    SimResult result = calculateTrajectory(rpm, hoodAngle, turretAngle, goalZ, robot);
 
-    Vec3 position = createVec3(0.0, 0.0, 0.0);
-    Vec3 velocity = calculateInitialShotForce(rpm, pitch, yaw);
-
-    double dt = 0.01; // timestep (seconds)
-    double time = 0.0;
-
-    while (position.z >= 0.0) {
-
-        Vec3 force = returnForceVector(velocity, createVec3(0.0, 0, 0.0));
-
-        Vec3 acceleration = scalarMultVec3(1.0 / ballMass, force);
-
-        velocity = addVec3(velocity, scalarMultVec3(dt, acceleration));
-
-        position = addVec3(position, scalarMultVec3(dt, velocity));
-
-        time += dt;
-    }
-
-    printf("Final Posistion\n");
-    printVec3(position);
-    printf("Flight time: %.2fs\n", time);
+    // Print results
+    printf("Final Position: x=%.2f, y=%.2f, z=%.2f\n",
+           result.finalPosition.x, result.finalPosition.y, result.finalPosition.z);
+    printf("Flight Time: %.2fs\n", result.shotTime);
+    printf("Max Height: %.2fm\n", result.maxHeight);
+    printf("Coming from top: %s\n", result.comingFromTop ? "Yes" : "No");
 
     return 0;
 }

@@ -7,6 +7,20 @@ typedef struct {
     double z;
 } Vec3;
 
+typedef struct {
+    double vx;
+    double vy;
+    double omega;
+} ChassisSpeeds;
+
+ChassisSpeeds createChassisSpeeds(double vx, double vy, double omega) {
+    ChassisSpeeds result;
+    result.vx = vx;
+    result.vy = vy;
+    result.omega = omega;
+    return result;
+}
+
 Vec3 createVec3(double x, double y, double z) {
     Vec3 result;
     result.x = x;

@@ -6,3 +6,5 @@ double gravityForce = -9.81; //m/s^2
 double airDensity = 1.225; //kg/m^3
 double CD = 0.47;
 double CL = 0.3;
+double shooterOffsetX = 0.0;
+double shooterOffsetY = 0.0;
