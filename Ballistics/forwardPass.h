@@ -8,6 +8,9 @@ typedef struct {
     double shotTime;
     double maxHeight;
     bool comingFromTop;
+    double RPM;
+    double HoodAngle;
+    double TurretAngle;
 } SimResult;
 
 SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, double goalZ, ChassisSpeeds robotVelocity);

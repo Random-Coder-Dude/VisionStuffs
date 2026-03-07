@@ -15,5 +15,6 @@ extern double CD;
 extern double CL;
 extern double shooterOffsetX;
 extern double shooterOffsetY;
+extern double HeightConstant;
 
 #endif
