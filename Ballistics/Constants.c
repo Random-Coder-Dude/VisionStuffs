@@ -8,3 +8,4 @@ double CD = 0.47;
 double CL = 0.3;
 double shooterOffsetX = 0.0;
 double shooterOffsetY = 0.0;
+double HeightConstant = 0.0;

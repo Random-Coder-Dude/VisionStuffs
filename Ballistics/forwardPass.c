@@ -9,6 +9,9 @@ typedef struct {
     double shotTime;
     double maxHeight;
     bool comingFromTop;
+    double RPM;
+    double HoodAngle;
+    double TurretAngle;
 } SimResult;
 
 typedef struct {
@@ -17,11 +20,25 @@ typedef struct {
 } HoodAngleEntry;
 
 HoodAngleEntry hoodLUT[] = {
-    {60.0, 30.0},
-    {55.0, 35.0},
-    {50.0, 40.0},
+    {0.0, 90.0},
+    {5.0, 85.0},
+    {10.0, 80.0},
+    {15.0, 75.0},
+    {20.0, 70.0},
+    {25.0, 65.0},
+    {30.0, 60.0},
+    {35.0, 55.0},
+    {40.0, 50.0},
     {45.0, 45.0},
-    {40.0, 50.0}
+    {50.0, 40.0},
+    {55.0, 35.0},
+    {60.0, 30.0},
+    {65.0, 25.0},
+    {70.0, 20.0},
+    {75.0, 15.0},
+    {80.0, 10.0},
+    {85.0, 5.0},
+    {90.0, 0.0}
 };
 
 const int HOOD_LUT_SIZE = sizeof(hoodLUT)/sizeof(hoodLUT[0]);
@@ -46,7 +63,7 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, 
     Vec3 position = createVec3(0.0, 0.0, 0.01); // start slightly above ground
     Vec3 velocity = calculateInitialShotForce(rpm, pitch, yaw, robotVelocity);
 
-    double dt = 0.01;
+    double dt = 0.001;
     double time = 0.0;
     double maxHeight = position.z;
     bool reachedGoalHeight = false;
@@ -107,6 +124,9 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, 
     result.shotTime = time;
     result.maxHeight = maxHeight;
     result.comingFromTop = maxHeight > goalZ;
+    result.RPM = rpm;
+    result.HoodAngle = hoodAngle;
+    result.TurretAngle = turretAngle;
 
     return result;
 }

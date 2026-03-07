@@ -16,7 +16,7 @@ ShooterEntry shooterLUT[] = {
     {5000, 19.9}
 };
 
-int LUT_SIZE = 5;
+int LUT_SIZE = sizeof(shooterLUT)/sizeof(shooterLUT[0]);
 
 double getVelocityFromRPM(int rpm) {
 
@@ -46,7 +46,6 @@ Vec3 calculateInitialShotForce(int RPM, double Pitch, double Yaw, ChassisSpeeds 
     Yaw = Yaw * M_PI / 180.0;
 
     double velocityMagnitude = getVelocityFromRPM(RPM);
-    printf("Inital Velocity Magnitude: %f\n", velocityMagnitude);
 
     double xTerm = cos(Pitch) * cos(Yaw);
     double yTerm = cos(Pitch) * sin(Yaw);

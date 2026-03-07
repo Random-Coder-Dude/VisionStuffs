@@ -1,27 +1,81 @@
 #include <stdio.h>
+#include <math.h>
+
 #include "forwardPass.h"
 #include "structs.h"
 #include "Constants.h"
+#include "scoreTrajectory.h"
+
+double evaluate(double rpm, double hood, double turret,
+                Vec3 goalPose, ChassisSpeeds robot)
+{
+    SimResult result = calculateTrajectory(rpm, hood, turret, goalPose.z, robot);
+    return scoreTrajectory(result, goalPose, robot);
+}
 
 int main() {
-    // Example robot velocity (vx, vy, omega)
-    ChassisSpeeds robot = createChassisSpeeds(0, 0, 0);
 
-    // Example shot parameters
-    double rpm = 5000;          // shooter RPM
-    double hoodAngle = 45.0;    // hood angle in degrees
-    double turretAngle = 0.0;   // yaw in degrees
-    double goalZ = 2.0;         // target height in meters
+    ChassisSpeeds robot = createChassisSpeeds(2, 2, 0);
+    Vec3 goalPose = createVec3(2.93, 1.57, 0);
 
-    // Calculate trajectory
-    SimResult result = calculateTrajectory(rpm, hoodAngle, turretAngle, goalZ, robot);
+    double rpm = 4500;
+    double hoodAngle = 0.0;
+    double turretAngle = 0.0;
 
-    // Print results
-    printf("Final Position: x=%.2f, y=%.2f, z=%.2f\n",
-           result.finalPosition.x, result.finalPosition.y, result.finalPosition.z);
-    printf("Flight Time: %.2fs\n", result.shotTime);
-    printf("Max Height: %.2fm\n", result.maxHeight);
-    printf("Coming from top: %s\n", result.comingFromTop ? "Yes" : "No");
+    double bestRPM = rpm;
+    double bestHood = hoodAngle;
+    double bestTurret = turretAngle;
+
+    double bestScore = evaluate(rpm, hoodAngle, turretAngle, goalPose, robot);
+
+    double epsilon = 5.0;
+
+    double rpmLR = 0.0005;
+    double hoodLR = 0.05;
+    double turretLR = 0.05;
+
+    int iterations = 1000;
+
+    for (int i = 0; i < iterations; i++) {
+
+        double base = evaluate(rpm, hoodAngle, turretAngle, goalPose, robot);
+
+        double gradRPM =
+            (evaluate(rpm + epsilon, hoodAngle, turretAngle, goalPose, robot) -
+             evaluate(rpm - epsilon, hoodAngle, turretAngle, goalPose, robot))
+            / (2 * epsilon);
+
+        double gradHood =
+            (evaluate(rpm, hoodAngle + epsilon, turretAngle, goalPose, robot) -
+             evaluate(rpm, hoodAngle - epsilon, turretAngle, goalPose, robot))
+            / (2 * epsilon);
+
+        double gradTurret =
+            (evaluate(rpm, hoodAngle, turretAngle + epsilon, goalPose, robot) -
+             evaluate(rpm, hoodAngle, turretAngle - epsilon, goalPose, robot))
+            / (2 * epsilon);
+
+        rpm -= rpmLR * gradRPM;
+        hoodAngle -= hoodLR * gradHood;
+        turretAngle -= turretLR * gradTurret;
+
+        double newScore = evaluate(rpm, hoodAngle, turretAngle, goalPose, robot);
+
+        if (newScore < bestScore) {
+            bestScore = newScore;
+            bestRPM = rpm;
+            bestHood = hoodAngle;
+            bestTurret = turretAngle;
+        }
+
+        printf("Iter %d | score %f\n", i, newScore);
+    }
+
+    printf("\nBEST SOLUTION\n");
+    printf("Score: %f\n", bestScore);
+    printf("RPM: %f\n", bestRPM);
+    printf("Hood: %f\n", bestHood);
+    printf("Turret: %f\n", bestTurret);
 
     return 0;
 }
