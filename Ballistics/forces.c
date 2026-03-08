@@ -4,8 +4,8 @@
 #include "Constants.h"
 
 Vec3 calculateGravity() {
-    Vec3 result = createVec3(0.0, 0.0, 1);
-    result = scalarMultVec3(gravityForce, result);
+    Vec3 result = createVec3(0.0, 0.0, gravityForce);
+    result = scalarMultVec3(ballMass, result);
     return result;
 }
 

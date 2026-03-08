@@ -12,6 +12,7 @@ typedef struct {
     double RPM;
     double HoodAngle;
     double TurretAngle;
+    Vec3 spin;
 } SimResult;
 
 typedef struct {
@@ -56,7 +57,7 @@ double getPitchFromHood(double hoodAngle) {
     return hoodLUT[HOOD_LUT_SIZE-1].pitch;
 }
 
-SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, double goalZ, ChassisSpeeds robotVelocity) {
+SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, double goalZ, ChassisSpeeds robotVelocity, Vec3 spin) {
     double pitch = getPitchFromHood(hoodAngle);
     double yaw = turretAngle;
 
@@ -71,7 +72,7 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, 
 
     // ---- Phase 1: Ascent ----
     while (position.z >= 0.0) {
-        Vec3 force = returnForceVector(velocity, createVec3(0.0, 0.0, 0.0));
+        Vec3 force = returnForceVector(velocity, spin);
         Vec3 acceleration = scalarMultVec3(1.0 / ballMass, force);
 
         velocity = addVec3(velocity, scalarMultVec3(dt, acceleration));
@@ -127,6 +128,7 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, 
     result.RPM = rpm;
     result.HoodAngle = hoodAngle;
     result.TurretAngle = turretAngle;
+    result.spin = spin;
 
     return result;
 }

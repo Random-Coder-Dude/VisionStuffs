@@ -11,8 +11,9 @@ typedef struct {
     double RPM;
     double HoodAngle;
     double TurretAngle;
+    Vec3 spin;
 } SimResult;
 
-SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, double goalZ, ChassisSpeeds robotVelocity);
+SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle, double goalZ, ChassisSpeeds robotVelocity, Vec3 spin);
 
 #endif

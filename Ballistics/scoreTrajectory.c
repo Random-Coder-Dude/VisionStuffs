@@ -23,7 +23,8 @@ double scoreTrajectory(SimResult trajectory, Vec3 goalPose, ChassisSpeeds robot)
         trajectory.HoodAngle,
         trajectory.TurretAngle,
         goalPose.z,
-        robot
+        robot,
+        trajectory.spin
     );
 
     Vec3 deltaPos = addVec3(perturbed.finalPosition, scalarMultVec3(-1.0, trajectory.finalPosition));
