@@ -1,7 +1,5 @@
-#ifndef INITIALVELO_H
-#define INITIALVELO_H
+#pragma once
+
 #include "structs.h"
 
-Vec3 calculateInitialShotForce(int RPM, double Pitch, double Yaw, ChassisSpeeds robot);
-
-#endif
+Vec3 calculateInitialShotForce(double RPM, double pitch, double yaw, ChassisSpeeds robot);

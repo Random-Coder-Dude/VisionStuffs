@@ -1,5 +1,6 @@
-#ifndef STRUCT_H
-#define STRUCT_H
+#pragma once
+
+#include <stdio.h>
 
 typedef struct {
     double x;
@@ -20,6 +21,5 @@ Vec3 addVec3(Vec3 a, Vec3 b);
 double magnitudeVec3(Vec3 a);
 Vec3 normalizeVec3(Vec3 a);
 Vec3 crossVec3(Vec3 a, Vec3 b);
+Vec3 lerpVec3(Vec3 a, Vec3 b, double t);
 void printVec3(Vec3 a);
-
-#endif
