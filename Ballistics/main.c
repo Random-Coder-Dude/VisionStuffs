@@ -43,10 +43,10 @@ static double evaluate(double rpm, double hood, double turret,
 int main(void) {
 
     ChassisSpeeds robot    = createChassisSpeeds(0.0, 0.0, 0.0);
-    Vec3          goalPose = createVec3(15.0, 0.0, 2.0);
+    Vec3          goalPose = createVec3(2.0, 0.0, 2.0);
 
-    double rpm         = 4000.0;
-    double hoodAngle   = 45.0;
+    double rpm         = 2000.0;
+    double hoodAngle   = 20.0;
     double turretAngle = 0.0;
 
     double bestRPM    = rpm;
@@ -71,7 +71,7 @@ int main(void) {
     const double lrMin      = 1e-4;
     const double lrMax      = 200.0;
 
-    const int iterations = 1000;
+    const int iterations = 10000;
 
     for (int i = 0; i < iterations; i++) {
 
@@ -151,7 +151,7 @@ int main(void) {
             lr = clamp(lr * lrGrow, lrMin, lrMax); // reward good step
         }
 
-        if (i % 50 == 0 || newScore < bestScore) {
+        if (i % 500 == 0 || newScore < bestScore) {
             SimResult dbg = calculateTrajectory(rpm, hoodAngle, turretAngle,
                                                 goalPose.z, robot,
                                                 createVec3(0,0,0));
