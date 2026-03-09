@@ -1,0 +1,20 @@
+[Unit]
+Description=NetworkTables Logger
+After=network.target local-fs.target
+RequiresMountsFor=/media/usb
+
+[Service]
+Type=simple
+User=orangepi
+WorkingDirectory=/home/orangepi/nt_logger
+ExecStartPre=/bin/mkdir -p /media/usb/nt_logs
+ExecStart=/usr/bin/python3 /home/orangepi/nt_logger/nt_logger.py
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

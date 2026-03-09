@@ -1,106 +1,173 @@
+/**
+ * @file forwardPass.c
+ * @brief RK4 numerical trajectory integrator.
+ *
+ * Replaces the original Euler integrator with a classical 4th-order
+ * Runge-Kutta (RK4) scheme for significantly improved accuracy, especially
+ * at longer ranges where Magnus and drag forces compound step errors.
+ *
+ * RK4 recap — for dy/dt = f(t, y):
+ *   k1 = f(t,        y)
+ *   k2 = f(t + dt/2, y + dt/2 * k1)
+ *   k3 = f(t + dt/2, y + dt/2 * k2)
+ *   k4 = f(t + dt,   y + dt   * k3)
+ *   y_next = y + (dt/6) * (k1 + 2*k2 + 2*k3 + k4)
+ *
+ * Our state vector is [position (Vec3), velocity (Vec3)].
+ * The derivative is   [velocity,        acceleration].
+ * Acceleration = F_net / m  where F_net = gravity + drag + Magnus.
+ *
+ * Spin is held constant throughout the flight (rigid-body assumption).
+ * In reality spin decays, but the effect on FRC-range shots is small.
+ */
+
 #include "forwardPass.h"
 #include "initialVelo.h"
 #include "forces.h"
 #include "Constants.h"
 
-typedef struct {
-    double hoodAngle;
-    double pitch;
-} HoodAngleEntry;
+/** Fixed integration timestep (seconds). Smaller = more accurate, slower. */
+#define DT 0.001
 
-static HoodAngleEntry hoodLUT[] = {
-    { 0.0, 85.0},   // point-blank, very high arc
-    { 2.0, 80.0},
-    { 4.0, 75.0},
-    { 6.0, 70.0},
-    { 8.0, 65.0},
-    {10.0, 60.0},
-    {12.0, 55.0},
-    {14.0, 50.0},   // medium distance
-    {16.0, 45.0},
-    {18.0, 40.0},
-    {20.0, 35.0},   // long distance
-    {22.0, 30.0},
-    {24.0, 25.0},
-    {26.0, 20.0},
-    {28.0, 15.0},
-    {30.0, 10.0}    // max distance, flat shot
-};
+/* =========================================================================
+ * Private RK4 Helper
+ * ========================================================================= */
 
-static const int HOOD_LUT_SIZE = sizeof(hoodLUT) / sizeof(hoodLUT[0]);
+/**
+ * @brief Advance [position, velocity] by one RK4 step.
+ *
+ * Given current position p and velocity v, computes k1–k4 for both
+ * the position derivative (= v) and the velocity derivative (= a = F/m),
+ * then blends them in the standard RK4 weighted sum.
+ *
+ * Because aerodynamic forces depend only on velocity (not position or time),
+ * the force evaluation at each k-stage uses the velocity estimate from the
+ * previous k-stage.
+ *
+ * @param[in,out] pos  Position vector, updated in place.
+ * @param[in,out] vel  Velocity vector, updated in place.
+ * @param spin         Constant spin vector for the step (rad/s).
+ * @param dt           Timestep (s).
+ */
+static void rk4Step(Vec3 *pos, Vec3 *vel, Vec3 spin, double dt) {
+    /* --- k1: derivative at the start of the interval --- */
+    Vec3 force1 = returnForceVector(*vel, spin);
+    Vec3 acc1   = scalarMultVec3(1.0 / BALL_MASS, force1);
+    Vec3 k1_pos = *vel;                /* dp/dt = v */
+    Vec3 k1_vel = acc1;                /* dv/dt = a */
 
-static double getPitchFromHood(double hoodAngle) {
-    if (hoodAngle <= hoodLUT[0].hoodAngle)               return hoodLUT[0].pitch;
-    if (hoodAngle >= hoodLUT[HOOD_LUT_SIZE-1].hoodAngle) return hoodLUT[HOOD_LUT_SIZE-1].pitch;
+    /* --- k2: derivative at midpoint, using k1 estimate --- */
+    Vec3 vel2   = addVec3(*vel, scalarMultVec3(0.5 * dt, k1_vel));
+    Vec3 force2 = returnForceVector(vel2, spin);
+    Vec3 acc2   = scalarMultVec3(1.0 / BALL_MASS, force2);
+    Vec3 k2_pos = vel2;
+    Vec3 k2_vel = acc2;
 
-    for (int i = 0; i < HOOD_LUT_SIZE - 1; i++) {
-        if (hoodAngle >= hoodLUT[i].hoodAngle && hoodAngle <= hoodLUT[i+1].hoodAngle) {
-            double t = (hoodAngle - hoodLUT[i].hoodAngle) /
-                       (hoodLUT[i+1].hoodAngle - hoodLUT[i].hoodAngle);
-            return hoodLUT[i].pitch + t * (hoodLUT[i+1].pitch - hoodLUT[i].pitch);
-        }
-    }
-    return hoodLUT[HOOD_LUT_SIZE-1].pitch;
+    /* --- k3: derivative at midpoint, using k2 estimate --- */
+    Vec3 vel3   = addVec3(*vel, scalarMultVec3(0.5 * dt, k2_vel));
+    Vec3 force3 = returnForceVector(vel3, spin);
+    Vec3 acc3   = scalarMultVec3(1.0 / BALL_MASS, force3);
+    Vec3 k3_pos = vel3;
+    Vec3 k3_vel = acc3;
+
+    /* --- k4: derivative at end of interval, using k3 estimate --- */
+    Vec3 vel4   = addVec3(*vel, scalarMultVec3(dt, k3_vel));
+    Vec3 force4 = returnForceVector(vel4, spin);
+    Vec3 acc4   = scalarMultVec3(1.0 / BALL_MASS, force4);
+    Vec3 k4_pos = vel4;
+    Vec3 k4_vel = acc4;
+
+    /* --- Weighted blend: (k1 + 2*k2 + 2*k3 + k4) / 6 --- */
+    /* Position update */
+    Vec3 dPos = scalarMultVec3(dt / 6.0,
+        addVec3(k1_pos,
+        addVec3(scalarMultVec3(2.0, k2_pos),
+        addVec3(scalarMultVec3(2.0, k3_pos),
+                k4_pos))));
+
+    /* Velocity update */
+    Vec3 dVel = scalarMultVec3(dt / 6.0,
+        addVec3(k1_vel,
+        addVec3(scalarMultVec3(2.0, k2_vel),
+        addVec3(scalarMultVec3(2.0, k3_vel),
+                k4_vel))));
+
+    *pos = addVec3(*pos, dPos);
+    *vel = addVec3(*vel, dVel);
 }
 
+/* =========================================================================
+ * Public API
+ * ========================================================================= */
+
+/**
+ * @brief Simulate the full ball trajectory using RK4 integration.
+ *
+ * Integration phases:
+ *   Phase 1 (ascent):  Integrate until vz < 0 (apex reached).
+ *                      Spin is active — Magnus lift matters most here.
+ *   Phase 2 (descent): Continue integrating until position.z <= goalZ.
+ *                      Spin is kept constant (rigid-body assumption).
+ *                      Sub-step linear interpolation pins down the exact
+ *                      crossing point for accurate XY landing coordinates.
+ *
+ * If the ball never reaches goalZ altitude (trajectory too flat), valid=false
+ * and comingFromTop=false are set in the returned SimResult.
+ */
 SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
-                              double goalZ, ChassisSpeeds robotVelocity, Vec3 spin)
+                              double goalZ, ChassisSpeeds robotVelocity)
 {
-    double pitch = getPitchFromHood(hoodAngle);
-    double yaw   = turretAngle;
+    /* Compute the initial velocity and ball spin from shooter parameters.
+     * Spin is derived from flywheel surface speed (see initialVelo.c). */
+    Vec3 spin;
+    Vec3 position = createVec3(0.0, 0.0, SHOOTER_HEIGHT_OFFSET);
+    Vec3 velocity = calculateInitialVelocity(rpm, hoodAngle, turretAngle,
+                                             robotVelocity, &spin);
 
-    Vec3 position = createVec3(0.0, 0.0, ShooterHeightOffset);
-    Vec3 velocity = calculateInitialShotForce(rpm, pitch, yaw, robotVelocity);
-
-    const double dt  = 0.001;
     double time      = 0.0;
     double maxHeight = position.z;
-    bool   reachedGoalHeightAscent = false;
+    bool   reachedApex = false;
 
     Vec3 lastPosition = position;
     Vec3 lastVelocity = velocity;
 
-    // ---- Phase 1: fly until apex (velocity.z flips negative) ----
+    /* ---- Phase 1: ascent — integrate until the apex ---- */
     while (position.z >= 0.0) {
-        Vec3 force        = returnForceVector(velocity, spin);
-        Vec3 acceleration = scalarMultVec3(1.0 / ballMass, force);
-
         lastPosition = position;
         lastVelocity = velocity;
 
-        time     += dt;
-        velocity  = addVec3(velocity, scalarMultVec3(dt, acceleration));
-        position  = addVec3(position, scalarMultVec3(dt, velocity));
+        rk4Step(&position, &velocity, spin, DT);
+        time += DT;
 
         if (position.z > maxHeight) maxHeight = position.z;
 
-        // Reached apex — switch to descent phase
+        /* The ball has passed the apex when vertical velocity goes negative. */
         if (velocity.z < 0.0) {
-            reachedGoalHeightAscent = (maxHeight >= goalZ);
+            reachedApex = (maxHeight >= goalZ);
             break;
         }
     }
 
-    // ---- Phase 2: descent until ball crosses goalZ downward ----
-    if (reachedGoalHeightAscent) {
-        Vec3 noSpin = createVec3(0.0, 0.0, 0.0);
-
+    /* ---- Phase 2: descent — integrate until ball crosses goalZ ---- */
+    if (reachedApex) {
         while (position.z >= 0.0) {
-            Vec3 force        = returnForceVector(velocity, noSpin);
-            Vec3 acceleration = scalarMultVec3(1.0 / ballMass, force);
-
             lastPosition = position;
             lastVelocity = velocity;
 
-            time     += dt;
-            velocity  = addVec3(velocity, scalarMultVec3(dt, acceleration));
-            position  = addVec3(position, scalarMultVec3(dt, velocity));
+            /* Spin is maintained constant (rigid-body assumption).
+             * Real spin decays slowly, but the effect is negligible
+             * for the sub-second flight times seen in FRC. */
+            rk4Step(&position, &velocity, spin, DT);
+            time += DT;
 
             if (position.z > maxHeight) maxHeight = position.z;
 
+            /* Ball has crossed the target height — interpolate for precision. */
             if (position.z <= goalZ) {
-                double frac = (goalZ - lastPosition.z) / (position.z - lastPosition.z);
-                time     = (time - dt) + frac * dt;
+                /* Fraction of the last step at which z == goalZ. */
+                double frac = (goalZ - lastPosition.z) /
+                              (position.z - lastPosition.z);
+                time     = (time - DT) + frac * DT;
                 position = lerpVec3(lastPosition, position, frac);
                 velocity = lerpVec3(lastVelocity, velocity, frac);
                 break;
@@ -108,15 +175,16 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
         }
     }
 
+    /* ---- Assemble result ---- */
     SimResult result;
-    result.valid         = reachedGoalHeightAscent;
+    result.valid         = reachedApex;
     result.finalPosition = position;
     result.shotTime      = time;
     result.maxHeight     = maxHeight;
-    result.comingFromTop = maxHeight > goalZ;
+    result.comingFromTop = (maxHeight > goalZ); /* true = descending arc */
     result.RPM           = rpm;
-    result.HoodAngle     = hoodAngle;
-    result.TurretAngle   = turretAngle;
+    result.hoodAngle     = hoodAngle;
+    result.turretAngle   = turretAngle;
     result.spin          = spin;
 
     return result;
