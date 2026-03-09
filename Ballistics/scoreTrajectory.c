@@ -24,6 +24,7 @@
 
 #define WEIGHT_POSITION      100.0
 #define WEIGHT_SENSITIVITY     5.0
+#define WEIGHT_APEX            2.0   /* penalize unnecessarily high arcs */
 #define RPM_SENSITIVITY_STEP  50.0
 
 /**
@@ -43,7 +44,7 @@ double scoreTrajectory(SimResult trajectory, Vec3 goalPose, ChassisSpeeds robot)
         /* Ball never made a valid descending crossing of goalZ.
          * Use 3-D distance so the gradient still points toward higher,
          * longer arcs rather than a flat featureless penalty. */
-        double dz = trajectory.maxHeight - goalPose.z;
+        double dz = trajectory.maxHeight - goalPose.z - 0.5;
         return WEIGHT_POSITION * (dx * dx + dy * dy + 10.0 * dz * dz);
     }
 
@@ -74,6 +75,12 @@ double scoreTrajectory(SimResult trajectory, Vec3 goalPose, ChassisSpeeds robot)
         sensitivityCost = normSens * normSens;
     }
 
+    /* Penalize apex height above goalZ — lower arcs are preferred.
+     * Only applies when scoreable, so it doesn't fight the non-scoreable gradient. */
+    double apexExcess = trajectory.maxHeight - goalPose.z;
+    double apexCost   = (apexExcess > 0.0) ? apexExcess * apexExcess : 0.0;
+
     return WEIGHT_POSITION    * positionCost
-         + WEIGHT_SENSITIVITY * sensitivityCost;
+         + WEIGHT_SENSITIVITY * sensitivityCost
+         + WEIGHT_APEX        * apexCost;
 }
