@@ -155,9 +155,9 @@ int main(void) {
 
     /* ── Initial parameter guess ─────────────────────────────────────────── */
 
-    double rpm         = 2000.0;  /**< Starting RPM guess          */
-    double hoodAngle   =   20.0;  /**< Starting hood angle (deg)   */
-    double turretAngle =    0.0;  /**< Starting turret angle (deg) */
+    double rpm         = 2000.0; /**< Starting RPM guess          */
+    double hoodAngle   =   20.0; /**< Starting hood angle (deg)   */
+    double turretAngle =    0.0; /**< Starting turret angle (deg) */
 
     /* Track the best solution seen so far. */
     double bestRPM    = rpm;
@@ -332,8 +332,7 @@ int main(void) {
            goalPose.x, goalPose.y);
     printf("  Max height : %.4f m  [goal z: %.2f]\n", best.maxHeight, goalPose.z);
     printf("  Flight time: %.4f s\n", best.shotTime);
-    printf("  Valid      : %s\n", best.valid        ? "yes" : "NO");
-    printf("  From top   : %s\n", best.comingFromTop ? "yes" : "NO");
+    printf("  Scoreable  : %s\n", best.scoreable ? "yes" : "NO");
 
     return 0;
 }

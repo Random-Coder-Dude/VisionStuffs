@@ -1,111 +1,58 @@
 /**
  * @file scoreTrajectory.c
- * @brief Continuous, differentiable scoring function for trajectory optimization.
+ * @brief Scoring function for gradient-descent trajectory optimization.
  *
- * The score is structured so that gradient descent in main.c can push the
- * optimizer from any starting point toward a valid, accurate, robust shot.
+ * Two modes depending on trajectory.scoreable:
  *
- * Score formula:
- *   score = positionWeight    * posError²
- *         + heightWeight      * heightExcess²
- *         + sensitivityWeight * rpmSensitivity²
- *         + invalidPenalty
+ * ── scoreable = true (ball descended through goalZ) ──────────────────────
  *
- * All terms are squared so the score surface is smooth (C¹ continuous),
- * which gives finite, useful gradients everywhere — critical for numerical
- * differentiation in the optimizer.
+ *   score = WEIGHT_POSITION * (dx² + dy²)
+ *         + WEIGHT_SENSITIVITY * rpmSensitivity²
+ *
+ * ── scoreable = false (peaked too low, hit floor short, etc.) ────────────
+ *
+ *   score = WEIGHT_POSITION * (dx² + dy² + dz²)
+ *
+ *   where dz = maxHeight - goalZ  (negative when ball peaked below goal).
+ *   Full 3-D distance gives a smooth gradient toward valid trajectories
+ *   from any starting point — no hard penalty cliffs.
  */
 
 #include <math.h>
 #include "scoreTrajectory.h"
 #include "Constants.h"
 
-/* =========================================================================
- * Weight Coefficients
- * ========================================================================= */
-
-/** @brief Weight for XY landing position error (dominant term). */
-#define WEIGHT_POSITION    100.0
-
-/** @brief Weight for excess arc height above the goal. */
-#define WEIGHT_HEIGHT        1.0
-
-/** @brief Weight penalizing shots that are highly sensitive to RPM changes. */
-#define WEIGHT_SENSITIVITY   5.0
-
-/* =========================================================================
- * Penalty Constants (large-but-finite for smooth gradient flow)
- * ========================================================================= */
-
-/** @brief Added when the trajectory is physically invalid (never reached goalZ). */
-#define PENALTY_INVALID     1e12
-
-/** @brief Added when the ball does not arrive from above (flat / rising shot). */
-#define PENALTY_NOT_FROM_TOP 1e9
-
-/* =========================================================================
- * RPM Sensitivity Parameters
- * ========================================================================= */
-
-/** @brief RPM perturbation used to estimate d(landing)/d(RPM) via finite diff. */
-#define RPM_SENSITIVITY_STEP 50.0
+#define WEIGHT_POSITION      100.0
+#define WEIGHT_SENSITIVITY     5.0
+#define RPM_SENSITIVITY_STEP  50.0
 
 /**
  * @brief Compute the optimization cost for a simulated trajectory.
  *
- * Implementation notes:
- *
- * 1. **Position error**: sqrt(dx²+dy²) is the XY miss distance at goalZ.
- *    We square it again in the final score formula for a smooth quadratic well.
- *
- * 2. **Height penalty**: Only penalizes arcs *above* the goal height.
- *    Arcs exactly at goalZ height (minimum energy) score zero here.
- *    We square the excess so the gradient points smoothly toward lower arcs.
- *
- * 3. **RPM sensitivity**: A second trajectory is simulated at (RPM + step)
- *    to approximate d(landing)/d(RPM) via forward finite difference.
- *    The raw sensitivity is then passed through the mapping
- *      s' = s / (1 + s)
- *    which squashes [0,∞) → [0,1) — preventing extreme sensitivity values
- *    from dominating the gradient when the optimizer is far from optimum.
- *    We square s' in the final sum for smoothness.
- *
- * 4. **Hard penalties**: Added as plain scalars (not multiplied by position
- *    error) so invalid trajectories still have a consistent score regardless
- *    of where the ball happened to land.
+ * @param trajectory  Result from calculateTrajectory().
+ * @param goalPose    (x, y) = desired landing point (m), z = target height (m).
+ * @param robot       Robot velocity forwarded to the sensitivity simulation.
+ * @return Non-negative scalar cost. Lower = better.
  */
 double scoreTrajectory(SimResult trajectory, Vec3 goalPose, ChassisSpeeds robot) {
 
-    /* ---- Validity penalties ---- */
-    double invalidPenalty = 0.0;
-    if (!trajectory.valid) {
-        /* Ball never reached goalZ altitude — completely unusable trajectory. */
-        invalidPenalty += PENALTY_INVALID;
+    double dx = trajectory.finalPosition.x - goalPose.x;
+    double dy = trajectory.finalPosition.y - goalPose.y;
+
+    if (!trajectory.scoreable) {
+        /* Ball never made a valid descending crossing of goalZ.
+         * Use 3-D distance so the gradient still points toward higher,
+         * longer arcs rather than a flat featureless penalty. */
+        double dz = trajectory.maxHeight - goalPose.z;
+        return WEIGHT_POSITION * (dx * dx + dy * dy + 10.0 * dz * dz);
     }
-    if (!trajectory.comingFromTop) {
-        /* Ball arrived from below or level — will hit the rim, not score. */
-        invalidPenalty += PENALTY_NOT_FROM_TOP;
-    }
 
-    /* ---- XY position error at the goal plane ---- */
-    double dx       = trajectory.finalPosition.x - goalPose.x;
-    double dy       = trajectory.finalPosition.y - goalPose.y;
-    double posError = sqrt(dx * dx + dy * dy); /* Euclidean miss distance (m) */
+    /* ── Valid shot: 2-D XY accuracy + RPM robustness ── */
 
-    /* ---- Excess arc height above the target ---- */
-    double heightExcess = trajectory.maxHeight - goalPose.z;
-    double heightPenalty = (heightExcess > 0.0) ? heightExcess : 0.0;
+    double positionCost = dx * dx + dy * dy;
 
-    /* ---- RPM sensitivity via forward finite difference ----
-     *
-     * Simulate a second shot with RPM perturbed by RPM_SENSITIVITY_STEP.
-     * The resulting shift in landing XY, divided by the RPM step, gives an
-     * approximate d(landing position)/d(RPM) in m/RPM.
-     *
-     * Note: we re-use the same hoodAngle, turretAngle, robot, and spin
-     * direction — only RPM changes.
-     */
-    double rpmSensitivity;
+    /* Forward finite difference: how much does landing shift per RPM unit? */
+    double sensitivityCost = 0.0;
     SimResult perturbed = calculateTrajectory(
         trajectory.RPM + RPM_SENSITIVITY_STEP,
         trajectory.hoodAngle,
@@ -114,25 +61,19 @@ double scoreTrajectory(SimResult trajectory, Vec3 goalPose, ChassisSpeeds robot)
         robot
     );
 
-    if (!perturbed.valid) {
-        /* Perturbation produced an invalid trajectory — assign maximum
-         * normalized sensitivity (1.0) to drive the optimizer away. */
-        rpmSensitivity = 1.0;
+    if (!perturbed.scoreable) {
+        /* Perturbation fell off the edge of the valid region — maximally sensitive. */
+        sensitivityCost = 1.0;
     } else {
-        double ddx = perturbed.finalPosition.x - trajectory.finalPosition.x;
-        double ddy = perturbed.finalPosition.y - trajectory.finalPosition.y;
+        double ddx     = perturbed.finalPosition.x - trajectory.finalPosition.x;
+        double ddy     = perturbed.finalPosition.y - trajectory.finalPosition.y;
         double rawSens = sqrt(ddx * ddx + ddy * ddy) / RPM_SENSITIVITY_STEP;
 
-        /* Sigmoid-like squash to [0, 1): prevents extreme values from
-         * overwhelming the position-error term during early optimization. */
-        rpmSensitivity = rawSens / (1.0 + rawSens);
+        /* Squash [0,∞) → [0,1) so outliers don't swamp the position term. */
+        double normSens = rawSens / (1.0 + rawSens);
+        sensitivityCost = normSens * normSens;
     }
 
-    /* ---- Combine into a single scalar cost (all terms quadratic) ---- */
-    double score = WEIGHT_POSITION    * posError      * posError
-                 + WEIGHT_HEIGHT      * heightPenalty * heightPenalty
-                 + WEIGHT_SENSITIVITY * rpmSensitivity * rpmSensitivity
-                 + invalidPenalty;
-
-    return score;
+    return WEIGHT_POSITION    * positionCost
+         + WEIGHT_SENSITIVITY * sensitivityCost;
 }
