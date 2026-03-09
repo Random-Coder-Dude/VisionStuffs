@@ -26,8 +26,13 @@
 #define MIN_HOOD         0.0
 #define MAX_HOOD        30.0
 #define SCORE_THRESHOLD  1.0
-#define MAX_RESTARTS      20
-#define MAX_ITERATIONS  1000
+#define MAX_RESTARTS      100
+#define MAX_ITERATIONS   200   /* gradient descent converges fast on this surface */
+
+/* Coarse timestep used during optimization — 10x faster than DT=0.001.
+ * The best solution is re-simulated at full precision after the search. */
+#define DT_COARSE       0.01
+#define DT_FINE         0.001
 
 /* =========================================================================
  * Internal Helpers
@@ -52,7 +57,7 @@ static double evaluate(double rpm, double hood, double turret,
     hood   = clamp(hood, MIN_HOOD, MAX_HOOD);
     turret = wrapAngle(turret);
 
-    SimResult result = calculateTrajectory(rpm, hood, turret, goalPose.z, robot);
+    SimResult result = calculateTrajectoryCoarse(rpm, hood, turret, goalPose.z, robot);
     return scoreTrajectory(result, goalPose, robot);
 }
 

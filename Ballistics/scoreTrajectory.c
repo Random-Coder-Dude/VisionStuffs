@@ -54,7 +54,7 @@ double scoreTrajectory(SimResult trajectory, Vec3 goalPose, ChassisSpeeds robot)
 
     /* Forward finite difference: how much does landing shift per RPM unit? */
     double sensitivityCost = 0.0;
-    SimResult perturbed = calculateTrajectory(
+    SimResult perturbed = calculateTrajectoryCoarse(
         trajectory.RPM + RPM_SENSITIVITY_STEP,
         trajectory.hoodAngle,
         trajectory.turretAngle,

@@ -23,7 +23,8 @@
 #include "Constants.h"
 
 /** Fixed integration timestep (seconds). Smaller = more accurate, slower. */
-#define DT 0.001
+#define DT        0.001
+#define DT_COARSE 0.01
 
 /* =========================================================================
  * Private RK4 Helper
@@ -92,8 +93,8 @@ static void rk4Step(Vec3 *pos, Vec3 *vel, Vec3 spin, double dt) {
  *   scoreable = true. If the ball hits the floor (z < 0) first, scoreable
  *   stays false.
  */
-SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
-                              double goalZ, ChassisSpeeds robotVelocity)
+static SimResult calculateTrajectoryDT(double rpm, double hoodAngle, double turretAngle,
+                                       double goalZ, ChassisSpeeds robotVelocity, double dt)
 {
     Vec3 spin;
     Vec3 position = createVec3(0.0, 0.0, SHOOTER_HEIGHT_OFFSET);
@@ -112,8 +113,8 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
         lastPosition = position;
         lastVelocity = velocity;
 
-        rk4Step(&position, &velocity, spin, DT);
-        time += DT;
+        rk4Step(&position, &velocity, spin, dt);
+        time += dt;
 
         if (position.z > maxHeight) maxHeight = position.z;
 
@@ -129,8 +130,8 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
         lastPosition = position;
         lastVelocity = velocity;
 
-        rk4Step(&position, &velocity, spin, DT);
-        time += DT;
+        rk4Step(&position, &velocity, spin, dt);
+        time += dt;
 
         if (position.z > maxHeight) maxHeight = position.z;
 
@@ -138,7 +139,7 @@ SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
             /* Ball crossed goalZ from above — interpolate for sub-step precision. */
             double frac = (goalZ - lastPosition.z) /
                           (position.z - lastPosition.z);
-            time     = (time - DT) + frac * DT;
+            time     = (time - dt) + frac * dt;
             position = lerpVec3(lastPosition, position, frac);
             velocity = lerpVec3(lastVelocity, velocity, frac);
             scoreable = true;
@@ -160,4 +161,16 @@ done:;
     result.spin          = spin;
 
     return result;
+}
+
+SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
+                              double goalZ, ChassisSpeeds robotVelocity)
+{
+    return calculateTrajectoryDT(rpm, hoodAngle, turretAngle, goalZ, robotVelocity, DT);
+}
+
+SimResult calculateTrajectoryCoarse(double rpm, double hoodAngle, double turretAngle,
+                                    double goalZ, ChassisSpeeds robotVelocity)
+{
+    return calculateTrajectoryDT(rpm, hoodAngle, turretAngle, goalZ, robotVelocity, DT_COARSE);
 }

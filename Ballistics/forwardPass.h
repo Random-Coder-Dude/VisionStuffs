@@ -65,3 +65,8 @@ typedef struct {
  */
 SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
                               double goalZ, ChassisSpeeds robotVelocity);
+
+/** Same as calculateTrajectory but uses a larger timestep for faster evaluation
+ *  during optimization. Less accurate but ~10x faster. */
+SimResult calculateTrajectoryCoarse(double rpm, double hoodAngle, double turretAngle,
+                                    double goalZ, ChassisSpeeds robotVelocity);
