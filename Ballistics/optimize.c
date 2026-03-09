@@ -1,10 +1,6 @@
 /**
  * @file optimize.c
  * @brief Public optimizer API — wraps gradient descent + random restarts.
- *
- * Call optimize() with initial guesses, robot state, and goal position.
- * Returns the best (RPM, hood, turret) found within SCORE_THRESHOLD,
- * or the best found after MAX_RESTARTS attempts.
  */
 
 #include <stdio.h>
@@ -16,27 +12,7 @@
 #include "structs.h"
 #include "forwardPass.h"
 #include "scoreTrajectory.h"
-
-/* =========================================================================
- * Bounds & Hyperparameters
- * ========================================================================= */
-
-#define MIN_RPM          0.0
-#define MAX_RPM       6000.0
-#define MIN_HOOD         0.0
-#define MAX_HOOD        30.0
-#define SCORE_THRESHOLD  1.0
-#define MAX_RESTARTS      100
-#define MAX_ITERATIONS   200   /* gradient descent converges fast on this surface */
-
-/* Coarse timestep used during optimization — 10x faster than DT=0.001.
- * The best solution is re-simulated at full precision after the search. */
-#define DT_COARSE       0.01
-#define DT_FINE         0.001
-
-/* =========================================================================
- * Internal Helpers
- * ========================================================================= */
+#include "Constants.h"
 
 static double clamp(double value, double min, double max) {
     if (value < min) return min;
@@ -53,8 +29,8 @@ static double wrapAngle(double angle) {
 static double evaluate(double rpm, double hood, double turret,
                         Vec3 goalPose, ChassisSpeeds robot)
 {
-    rpm    = clamp(rpm,  MIN_RPM,  MAX_RPM);
-    hood   = clamp(hood, MIN_HOOD, MAX_HOOD);
+    rpm    = clamp(rpm,  OPT_MIN_RPM,  OPT_MAX_RPM);
+    hood   = clamp(hood, OPT_MIN_HOOD, OPT_MAX_HOOD);
     turret = wrapAngle(turret);
 
     SimResult result = calculateTrajectoryCoarse(rpm, hood, turret, goalPose.z, robot);
@@ -70,36 +46,25 @@ static double runOptimizer(double rpm, double hoodAngle, double turretAngle,
     double bestTurret = turretAngle;
     double bestScore  = evaluate(rpm, hoodAngle, turretAngle, goalPose, robot);
 
-    const double rpmEps    = 50.0;
-    const double hoodEps   =  0.5;
-    const double turretEps =  0.5;
+    double lr = OPT_LR_INIT;
 
-    double lr = 5.0;
-    const double rpmLrScale    = 100.0;
-    const double hoodLrScale   =   1.0;
-    const double turretLrScale =   1.0;
-    const double lrDecay = 0.5;
-    const double lrGrow  = 1.05;
-    const double lrMin   = 1e-4;
-    const double lrMax   = 200.0;
-
-    for (int i = 0; i < MAX_ITERATIONS; i++) {
+    for (int i = 0; i < OPT_MAX_ITERATIONS; i++) {
         double currentScore = evaluate(rpm, hoodAngle, turretAngle, goalPose, robot);
 
         double gradRPM =
-            (evaluate(rpm + rpmEps, hoodAngle, turretAngle, goalPose, robot) -
-             evaluate(rpm - rpmEps, hoodAngle, turretAngle, goalPose, robot))
-            / (2.0 * rpmEps);
+            (evaluate(rpm + OPT_EPS_RPM, hoodAngle, turretAngle, goalPose, robot) -
+             evaluate(rpm - OPT_EPS_RPM, hoodAngle, turretAngle, goalPose, robot))
+            / (2.0 * OPT_EPS_RPM);
 
         double gradHood =
-            (evaluate(rpm, hoodAngle + hoodEps, turretAngle, goalPose, robot) -
-             evaluate(rpm, hoodAngle - hoodEps, turretAngle, goalPose, robot))
-            / (2.0 * hoodEps);
+            (evaluate(rpm, hoodAngle + OPT_EPS_HOOD, turretAngle, goalPose, robot) -
+             evaluate(rpm, hoodAngle - OPT_EPS_HOOD, turretAngle, goalPose, robot))
+            / (2.0 * OPT_EPS_HOOD);
 
         double gradTurret =
-            (evaluate(rpm, hoodAngle, turretAngle + turretEps, goalPose, robot) -
-             evaluate(rpm, hoodAngle, turretAngle - turretEps, goalPose, robot))
-            / (2.0 * turretEps);
+            (evaluate(rpm, hoodAngle, turretAngle + OPT_EPS_TURRET, goalPose, robot) -
+             evaluate(rpm, hoodAngle, turretAngle - OPT_EPS_TURRET, goalPose, robot))
+            / (2.0 * OPT_EPS_TURRET);
 
         double mag = sqrt(gradRPM * gradRPM + gradHood * gradHood + gradTurret * gradTurret);
         if (mag < 1e-12) break;
@@ -108,23 +73,23 @@ static double runOptimizer(double rpm, double hoodAngle, double turretAngle,
         double uHood   = gradHood   / mag;
         double uTurret = gradTurret / mag;
 
-        double stepRPM    = lr * rpmLrScale    * uRPM;
-        double stepHood   = lr * hoodLrScale   * uHood;
-        double stepTurret = lr * turretLrScale * uTurret;
+        double stepRPM    = lr * OPT_LR_SCALE_RPM    * uRPM;
+        double stepHood   = lr * OPT_LR_SCALE_HOOD   * uHood;
+        double stepTurret = lr * OPT_LR_SCALE_TURRET * uTurret;
 
-        double newRPM    = clamp(rpm - stepRPM, MIN_RPM, MAX_RPM);
-        double newHood   = clamp(hoodAngle - stepHood, MIN_HOOD, MAX_HOOD);
+        double newRPM    = clamp(rpm - stepRPM, OPT_MIN_RPM, OPT_MAX_RPM);
+        double newHood   = clamp(hoodAngle - stepHood, OPT_MIN_HOOD, OPT_MAX_HOOD);
         double newTurret = wrapAngle(turretAngle - stepTurret);
         double newScore  = evaluate(newRPM, newHood, newTurret, goalPose, robot);
 
         int lineIter = 0;
-        while (newScore >= currentScore && lr > lrMin && lineIter < 30) {
-            lr *= lrDecay;
-            stepRPM    = lr * rpmLrScale    * uRPM;
-            stepHood   = lr * hoodLrScale   * uHood;
-            stepTurret = lr * turretLrScale * uTurret;
-            newRPM    = clamp(rpm - stepRPM, MIN_RPM, MAX_RPM);
-            newHood   = clamp(hoodAngle - stepHood, MIN_HOOD, MAX_HOOD);
+        while (newScore >= currentScore && lr > OPT_LR_MIN && lineIter < 30) {
+            lr *= OPT_LR_DECAY;
+            stepRPM    = lr * OPT_LR_SCALE_RPM    * uRPM;
+            stepHood   = lr * OPT_LR_SCALE_HOOD   * uHood;
+            stepTurret = lr * OPT_LR_SCALE_TURRET * uTurret;
+            newRPM    = clamp(rpm - stepRPM, OPT_MIN_RPM, OPT_MAX_RPM);
+            newHood   = clamp(hoodAngle - stepHood, OPT_MIN_HOOD, OPT_MAX_HOOD);
             newTurret = wrapAngle(turretAngle - stepTurret);
             newScore  = evaluate(newRPM, newHood, newTurret, goalPose, robot);
             lineIter++;
@@ -139,7 +104,7 @@ static double runOptimizer(double rpm, double hoodAngle, double turretAngle,
             bestRPM    = rpm;
             bestHood   = hoodAngle;
             bestTurret = turretAngle;
-            lr = clamp(lr * lrGrow, lrMin, lrMax);
+            lr = clamp(lr * OPT_LR_GROW, OPT_LR_MIN, OPT_LR_MAX);
         }
     }
 
@@ -148,10 +113,6 @@ static double runOptimizer(double rpm, double hoodAngle, double turretAngle,
     *outTurret = bestTurret;
     return bestScore;
 }
-
-/* =========================================================================
- * Public API
- * ========================================================================= */
 
 OptimizeResult optimize(double rpm, double hood,
                         double robotVx, double robotVy, double robotOmega,
@@ -163,22 +124,20 @@ OptimizeResult optimize(double rpm, double hood,
     Vec3          goalPose = createVec3(goalX, goalY, goalZ);
     ChassisSpeeds robot    = createChassisSpeeds(robotVx, robotVy, robotOmega);
 
-    /* Turret angle: field-relative bearing to goal, rotated into robot frame. */
-    double fieldAngle  = atan2(goalY, goalX);
-    double initTurret  = wrapAngle(fieldAngle);
+    double initTurret = wrapAngle(atan2(goalY, goalX) * (180.0 / M_PI));
 
     double bestRPM = 0, bestHood = 0, bestTurret = 0, bestScore = 1e18;
 
-    for (int restart = 0; restart < MAX_RESTARTS; restart++) {
+    for (int restart = 0; restart < OPT_MAX_RESTARTS; restart++) {
         double seedRPM, seedHood;
 
         if (restart == 0) {
             seedRPM  = rpm;
             seedHood = hood;
         } else {
-            seedRPM  = MIN_RPM  + ((double)rand() / RAND_MAX) * (MAX_RPM  - MIN_RPM);
-            seedHood = MIN_HOOD + ((double)rand() / RAND_MAX) * (MAX_HOOD - MIN_HOOD);
-            initTurret = wrapAngle(initTurret + ((double)rand() / RAND_MAX) * 30.0 - 15.0);
+            seedRPM    = OPT_MIN_RPM  + ((double)rand() / RAND_MAX) * (OPT_MAX_RPM  - OPT_MIN_RPM);
+            seedHood   = OPT_MIN_HOOD + ((double)rand() / RAND_MAX) * (OPT_MAX_HOOD - OPT_MIN_HOOD);
+            initTurret = wrapAngle(initTurret + ((double)rand() / RAND_MAX) * 2.0 * OPT_TURRET_JITTER - OPT_TURRET_JITTER);
             printf("Restart %d | rpm=%.0f hood=%.1f turret=%.1f\n",
                    restart, seedRPM, seedHood, initTurret);
         }
@@ -196,7 +155,7 @@ OptimizeResult optimize(double rpm, double hood,
             bestTurret = outTurret;
         }
 
-        if (bestScore <= SCORE_THRESHOLD) break;
+        if (bestScore <= OPT_SCORE_THRESHOLD) break;
     }
 
     OptimizeResult result;

@@ -19,62 +19,7 @@
 #include "initialVelo.h"
 #include "Constants.h"
 
-/* =========================================================================
- * Look-up Tables
- * ========================================================================= */
-
-/**
- * @brief Maps flywheel RPM to ball exit speed (m/s).
- *
- * Entries must be sorted in ascending RPM order for the interpolation search
- * to work correctly. Calibrate these values empirically on your shooter rig.
- */
-typedef struct {
-    double rpm;      /**< Flywheel speed (rev/min)  */
-    double velocity; /**< Ball exit speed   (m/s)   */
-} ShooterEntry;
-
-static const ShooterEntry SHOOTER_LUT[] = {
-    {1000.0,  3.5},
-    {2000.0,  7.0},
-    {3000.0, 10.2},
-    {4000.0, 13.0},
-    {5000.0, 15.5},
-    {5500.0, 16.8},
-    {6000.0, 17.5}
-};
-static const int SHOOTER_LUT_SIZE = (int)(sizeof(SHOOTER_LUT) / sizeof(SHOOTER_LUT[0]));
-
-/**
- * @brief Maps the hood mechanism angle to the geometric launch pitch (degrees).
- *
- * A hood angle of 0° produces a nearly vertical (~85°) shot; 30° gives a
- * flatter (~10°) trajectory. Entries must be in ascending hood-angle order.
- */
-typedef struct {
-    double hoodAngle; /**< Hood mechanism angle (degrees) */
-    double pitch;     /**< Resulting launch pitch (degrees above horizontal) */
-} HoodAngleEntry;
-
-static const HoodAngleEntry HOOD_LUT[] = {
-    { 0.0, 85.0},
-    { 2.0, 80.0},
-    { 4.0, 75.0},
-    { 6.0, 70.0},
-    { 8.0, 65.0},
-    {10.0, 60.0},
-    {12.0, 55.0},
-    {14.0, 50.0},
-    {16.0, 45.0},
-    {18.0, 40.0},
-    {20.0, 35.0},
-    {22.0, 30.0},
-    {24.0, 25.0},
-    {26.0, 20.0},
-    {28.0, 15.0},
-    {30.0, 10.0}
-};
-static const int HOOD_LUT_SIZE = (int)(sizeof(HOOD_LUT) / sizeof(HOOD_LUT[0]));
+/* LUTs are defined in Constants.c / Constants.h */
 
 /* =========================================================================
  * Private Helpers

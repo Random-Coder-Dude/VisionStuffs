@@ -4,24 +4,29 @@
 #include "structs.h"
 
 int main(void) {
-    double goalX = 3.47;
-    double goalY = 0.0;
+    double seedRPM = 4000;
+    double seedHood = 20;
+    double robotX = 1;
+    double robotY = 1;
+    double robotOmega = 0;
+    double goalX = 15;
+    double goalY = 15;
     double goalZ = 2.0;
 
     OptimizeResult result = optimize(
         /* initial guesses */
-        4000.0,  /* rpm  */
-        20.0,    /* hood */
+        seedRPM,  /* rpm  15*/
+        seedHood,    /* hood */
         /* robot velocity */
-        0.0,     /* robotVx    (m/s)   */
-        0.0,     /* robotVy    (m/s)   */
-        0.0,     /* robotOmega (rad/s) */
+        robotX,     /* robotVx    (m/s)   */
+        robotY,     /* robotVy    (m/s)   */
+        robotOmega,     /* robotOmega (rad/s) */
         /* goal — robot-relative */
         goalX, goalY, goalZ
     );
 
     /* Re-simulate at full precision for landing and max height. */
-    ChassisSpeeds robot = createChassisSpeeds(0.0, 0.0, 0.0);
+    ChassisSpeeds robot = createChassisSpeeds(robotX, robotY, robotOmega);
     SimResult best = calculateTrajectory(result.rpm, result.hoodAngle,
                                          result.turretAngle, goalZ, robot);
 

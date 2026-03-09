@@ -23,8 +23,7 @@
 #include "Constants.h"
 
 /** Fixed integration timestep (seconds). Smaller = more accurate, slower. */
-#define DT        0.001
-#define DT_COARSE 0.01
+/* Timesteps are defined in Constants.c */
 
 /* =========================================================================
  * Private RK4 Helper
@@ -166,11 +165,11 @@ done:;
 SimResult calculateTrajectory(double rpm, double hoodAngle, double turretAngle,
                               double goalZ, ChassisSpeeds robotVelocity)
 {
-    return calculateTrajectoryDT(rpm, hoodAngle, turretAngle, goalZ, robotVelocity, DT);
+    return calculateTrajectoryDT(rpm, hoodAngle, turretAngle, goalZ, robotVelocity, SIM_DT_FINE);
 }
 
 SimResult calculateTrajectoryCoarse(double rpm, double hoodAngle, double turretAngle,
                                     double goalZ, ChassisSpeeds robotVelocity)
 {
-    return calculateTrajectoryDT(rpm, hoodAngle, turretAngle, goalZ, robotVelocity, DT_COARSE);
+    return calculateTrajectoryDT(rpm, hoodAngle, turretAngle, goalZ, robotVelocity, SIM_DT_COARSE);
 }
