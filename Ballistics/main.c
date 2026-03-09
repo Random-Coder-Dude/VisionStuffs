@@ -5,7 +5,7 @@
 
 int main(void) {
     double seedRPM = 4000;
-    double seedHood = 20;
+    double seedHood = 0;
     double robotX = 1;
     double robotY = 1;
     double robotOmega = 0;
