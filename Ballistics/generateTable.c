@@ -42,31 +42,36 @@ static void detect_pcores(void) {
     if (!buf) return;
     GetLogicalProcessorInformationEx(RelationProcessorCore, buf, &bufSize);
 
-    /* First pass: find the minimum (best) efficiency class — P-cores = 0. */
-    BYTE min_eff = 255;
+    /* First pass: find both min and max efficiency class.
+     * P-cores = min (0), E-cores = max (higher number).
+     * We want P-cores, so collect min_eff. */
+    BYTE min_eff = 255, max_eff = 0;
     BYTE *p = (BYTE *)buf;
     BYTE *end = p + bufSize;
     while (p < end) {
         SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info =
             (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)p;
         if (info->Relationship == RelationProcessorCore) {
-            if (info->Processor.EfficiencyClass < min_eff)
-                min_eff = info->Processor.EfficiencyClass;
+            BYTE e = info->Processor.EfficiencyClass;
+            if (e < min_eff) min_eff = e;
+            if (e > max_eff) max_eff = e;
         }
         p += info->Size;
     }
 
-    /* Second pass: collect one logical processor per P-core. */
+    /* Invert: use max_eff (E-cores) instead of min_eff (P-cores).
+     * Flip this line to min_eff to go back to P-cores. */
+    BYTE target_eff = max_eff;
+
+    /* Second pass: collect one logical processor per target core. */
     p = (BYTE *)buf;
     while (p < end) {
         SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info =
             (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)p;
         if (info->Relationship == RelationProcessorCore &&
-            info->Processor.EfficiencyClass == min_eff &&
+            info->Processor.EfficiencyClass == target_eff &&
             g_pcore_count < MAX_CORES)
         {
-            /* GroupMask[0].Mask has one bit set per logical processor in this core.
-             * __builtin_ctzll gives the index of the lowest set bit. */
             int lp = __builtin_ctzll(info->Processor.GroupMask[0].Mask);
             g_pcore_ids[g_pcore_count++] = lp;
             g_pcore_mask |= (DWORD_PTR)1 << lp;
@@ -140,7 +145,8 @@ int main(void) {
         wsSeedHood[i] = 15.0;
     }
 
-    int done = 0; /* atomic counter for progress, written under critical */
+    int done = 0;
+    double startTime = omp_get_wtime();
 
     /* ── Outer loop over distance slices — sequential ──────────────────
      * Must be sequential so each slice can warm-start from the previous one.
@@ -180,16 +186,19 @@ int main(void) {
                 turretArr[idx] = res.turretAngle;
                 validArr [idx] = (res.score <= OPT_SCORE_THRESHOLD) ? 1 : 0;
 
-                #pragma omp critical
-                {
-                    done++;
-                    if (done % 100 == 0 || done == total) {
-                        fprintf(stderr, "  [%d / %d]  dist=%.2f vx=%.1f vy=%.1f  "
-                                "rpm=%.0f hood=%.1f turret=%.2f  score=%.3f  valid=%d\n",
-                                done, total, dist, vx, vy,
-                                res.rpm, res.hoodAngle, res.turretAngle,
-                                res.score, validArr[idx]);
-                    }
+                #pragma omp atomic
+                done++;
+
+                if (done % 500 == 0 || done == total) {
+                    double elapsed = omp_get_wtime() - startTime;
+                    double eta     = (done > 0) ? elapsed * (total - done) / done : 0.0;
+                    fprintf(stderr, "  [%d / %d]  %.0fs elapsed  ETA %.0fs  "
+                            "dist=%.2f vx=%.2f vy=%.2f  "
+                            "rpm=%.0f hood=%.1f turret=%.2f  score=%.3f  valid=%d\n",
+                            done, total, elapsed, eta,
+                            dist, vx, vy,
+                            res.rpm, res.hoodAngle, res.turretAngle,
+                            res.score, validArr[idx]);
                 }
             }
             } /* end omp for */
