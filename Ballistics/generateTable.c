@@ -20,8 +20,23 @@
 #include <stdlib.h>
 #include <math.h>
 #include <omp.h>
+#include <windows.h>
 #include "optimize.h"
 #include "Constants.h"
+
+/* Ultra 7 265: 8 P-cores are logical processors 0-7 (no hyperthreading on Arrow Lake).
+ * Affinity mask 0xFF = binary 11111111 = cores 0-7 only. */
+#define PCORE_COUNT    8
+#define PCORE_AFFINITY 0xFF
+
+static void pin_to_pcores(void) {
+    /* Called once per OpenMP thread at startup.
+     * Each thread gets pinned to its own P-core so no two threads share a core
+     * and no thread ever migrates to an E-core. */
+    int tid = omp_get_thread_num();
+    DWORD_PTR mask = (DWORD_PTR)1 << (tid % PCORE_COUNT);
+    SetThreadAffinityMask(GetCurrentThread(), mask);
+}
 
 /* ── Table sweep parameters ──────────────────────────────────────────── */
 
@@ -88,8 +103,11 @@ int main(void) {
             sliceSeedHood[i] = wsSeedHood[i];
         }
 
-        #pragma omp parallel for schedule(dynamic, 1) collapse(2)
-        for (int xi = 0; xi < vxCount; xi++) {
+        #pragma omp parallel num_threads(PCORE_COUNT)
+        {
+            pin_to_pcores();  /* pin this thread to its assigned P-core */
+            #pragma omp for schedule(dynamic, 1) collapse(2)
+            for (int xi = 0; xi < vxCount; xi++) {
             for (int yi = 0; yi < vyCount; yi++) {
                 double vx = VX_MIN + xi * VX_STEP;
                 double vy = VY_MIN + yi * VY_STEP;
@@ -120,7 +138,8 @@ int main(void) {
                     }
                 }
             }
-        }
+            } /* end omp for */
+        } /* end omp parallel */
 
         /* Update warm-start seeds for next distance slice.
          * Only propagate from valid cells — invalid ones keep the previous seed
