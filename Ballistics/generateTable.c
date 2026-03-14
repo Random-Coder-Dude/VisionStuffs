@@ -25,19 +25,19 @@
 
 /* ── Table sweep parameters ──────────────────────────────────────────── */
 
-#define GOAL_Z       2.0
+#define GOAL_Z       1.8288
 
-#define DIST_MIN     1.0
-#define DIST_MAX     8.0
-#define DIST_STEP    0.25
+#define DIST_MIN     0.1
+#define DIST_MAX     15.0
+#define DIST_STEP    0.05
 
-#define VX_MIN      -4.0
-#define VX_MAX       4.0
-#define VX_STEP      0.5
+#define VX_MIN      -5.0
+#define VX_MAX       5.0
+#define VX_STEP      0.05
 
-#define VY_MIN      -4.0
-#define VY_MAX       4.0
-#define VY_STEP      0.5
+#define VY_MIN      -5.0
+#define VY_MAX       5.0
+#define VY_STEP      0.05
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
