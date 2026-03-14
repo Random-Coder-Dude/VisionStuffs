@@ -24,17 +24,66 @@
 #include "optimize.h"
 #include "Constants.h"
 
-/* Ultra 7 265: 8 P-cores are logical processors 0-7 (no hyperthreading on Arrow Lake).
- * Affinity mask 0xFF = binary 11111111 = cores 0-7 only. */
-#define PCORE_COUNT    8
-#define PCORE_AFFINITY 0xFF
+/* Runtime P-core detection using GetSystemCpuSetInformation.
+ * Builds a list of logical processor indices whose efficiency class == max
+ * (efficiency 0 = most powerful = P-cores on Intel hybrid). */
+
+#define MAX_CORES 64
+static int  g_pcore_ids[MAX_CORES]; /* logical processor index of each P-core */
+static int  g_pcore_count = 0;
+static DWORD_PTR g_pcore_mask = 0;
+
+static void detect_pcores(void) {
+    DWORD bufSize = 0;
+    /* First call gets required buffer size. */
+    GetLogicalProcessorInformationEx(RelationProcessorCore, NULL, &bufSize);
+    SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *buf =
+        (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)malloc(bufSize);
+    if (!buf) return;
+    GetLogicalProcessorInformationEx(RelationProcessorCore, buf, &bufSize);
+
+    /* First pass: find the minimum (best) efficiency class — P-cores = 0. */
+    BYTE min_eff = 255;
+    BYTE *p = (BYTE *)buf;
+    BYTE *end = p + bufSize;
+    while (p < end) {
+        SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info =
+            (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)p;
+        if (info->Relationship == RelationProcessorCore) {
+            if (info->Processor.EfficiencyClass < min_eff)
+                min_eff = info->Processor.EfficiencyClass;
+        }
+        p += info->Size;
+    }
+
+    /* Second pass: collect one logical processor per P-core. */
+    p = (BYTE *)buf;
+    while (p < end) {
+        SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *info =
+            (SYSTEM_LOGICAL_PROCESSOR_INFORMATION_EX *)p;
+        if (info->Relationship == RelationProcessorCore &&
+            info->Processor.EfficiencyClass == min_eff &&
+            g_pcore_count < MAX_CORES)
+        {
+            /* GroupMask[0].Mask has one bit set per logical processor in this core.
+             * __builtin_ctzll gives the index of the lowest set bit. */
+            int lp = __builtin_ctzll(info->Processor.GroupMask[0].Mask);
+            g_pcore_ids[g_pcore_count++] = lp;
+            g_pcore_mask |= (DWORD_PTR)1 << lp;
+        }
+        p += info->Size;
+    }
+
+    free(buf);
+}
 
 static void pin_to_pcores(void) {
-    /* Called once per OpenMP thread at startup.
-     * Each thread gets pinned to its own P-core so no two threads share a core
-     * and no thread ever migrates to an E-core. */
+    /* Pin this OpenMP thread to its own P-core (round-robin across detected P-cores).
+     * Called once per thread inside the parallel region. */
     int tid = omp_get_thread_num();
-    DWORD_PTR mask = (DWORD_PTR)1 << (tid % PCORE_COUNT);
+    if (g_pcore_count == 0) return;
+    int core = g_pcore_ids[tid % g_pcore_count];
+    DWORD_PTR mask = (DWORD_PTR)1 << core;
     SetThreadAffinityMask(GetCurrentThread(), mask);
 }
 
@@ -61,6 +110,11 @@ static int countSteps(double min, double max, double step) {
 }
 
 int main(void) {
+    detect_pcores();
+    fprintf(stderr, "Detected %d P-cores: ", g_pcore_count);
+    for (int i = 0; i < g_pcore_count; i++) fprintf(stderr, "%d ", g_pcore_ids[i]);
+    fprintf(stderr, "\n");
+
     int distCount = countSteps(DIST_MIN, DIST_MAX, DIST_STEP);
     int vxCount   = countSteps(VX_MIN,   VX_MAX,   VX_STEP);
     int vyCount   = countSteps(VY_MIN,   VY_MAX,   VY_STEP);
@@ -103,7 +157,7 @@ int main(void) {
             sliceSeedHood[i] = wsSeedHood[i];
         }
 
-        #pragma omp parallel num_threads(PCORE_COUNT)
+        #pragma omp parallel num_threads(g_pcore_count)
         {
             pin_to_pcores();  /* pin this thread to its assigned P-core */
             #pragma omp for schedule(dynamic, 1) collapse(2)
