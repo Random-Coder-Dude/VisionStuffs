@@ -87,6 +87,9 @@ const double OPT_TURRET_JITTER = 45.0;
 const double SCORE_WEIGHT_POSITION    = 100.0;
 const double SCORE_WEIGHT_SENSITIVITY =   5.0;
 const double SCORE_WEIGHT_APEX        =   0.0;
+/* BUG FIX #2: This step can be negative (perturbing RPM downward is fine),
+ * but scoreTrajectory.c now uses fabs() when dividing, so the sign no longer
+ * corrupts the normalization. Left negative to test robustness to lower RPM. */
 const double SCORE_RPM_SENSITIVITY_STEP = -50.0;
 const double SCORE_UNSCOREABLE_DZ_OFFSET =  0.5;
 const double SCORE_UNSCOREABLE_DZ_WEIGHT = 10.0;
@@ -105,12 +108,13 @@ const ShooterLUTEntry SHOOTER_LUT[] = {
 };
 const int SHOOTER_LUT_SIZE = (int)(sizeof(SHOOTER_LUT) / sizeof(SHOOTER_LUT[0]));
 
-/** Hood mechanism angle → geometric launch pitch (degrees).
- *  0° hood = ~85° pitch (nearly vertical); 30° hood = ~10° pitch (flat). */
+/* BUG FIX #3: Fixed comment — 0° hood = 0° pitch (flat/horizontal shot);
+ * 30° hood = 60° pitch (steep arc). The old comment claimed the opposite
+ * (0° = ~85° vertical, 30° = ~10° flat) which directly contradicted the table. */
 const HoodLUTEntry HOOD_LUT[] = {
-    { 0.0, 0.0},
-    { 2.0, 4.0},
-    { 4.0, 8.0},
+    { 0.0,  0.0},
+    { 2.0,  4.0},
+    { 4.0,  8.0},
     { 6.0, 12.0},
     { 8.0, 16.0},
     {10.0, 20.0},

@@ -7,12 +7,22 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+#include <omp.h>
 
 #include "optimize.h"
 #include "structs.h"
 #include "forwardPass.h"
 #include "scoreTrajectory.h"
 #include "Constants.h"
+
+/* Thread-safe LCG — replaces rand_r which is POSIX-only and unavailable on MinGW. */
+static unsigned int lcg_next(unsigned int *state) {
+    *state = *state * 1664525u + 1013904223u;
+    return *state;
+}
+static double lcg_double(unsigned int *state) {
+    return (double)(lcg_next(state) >> 1) / (double)0x7FFFFFFF;
+}
 
 static double clamp(double value, double min, double max) {
     if (value < min) return min;
@@ -118,35 +128,38 @@ OptimizeResult optimize(double rpm, double hood,
                         double robotVx, double robotVy, double robotOmega,
                         double goalX, double goalY, double goalZ)
 {
-    static int seeded = 0;
-    if (!seeded) { srand((unsigned int)time(NULL)); seeded = 1; }
+    /* Thread-safe RNG: each call gets its own seed derived from the thread ID
+     * and wall-clock time so parallel calls never share state. */
+    unsigned int randState = (unsigned int)(time(NULL))
+                           ^ (unsigned int)(omp_get_thread_num() * 2654435761u);
 
     Vec3          goalPose = createVec3(goalX, goalY, goalZ);
     ChassisSpeeds robot    = createChassisSpeeds(robotVx, robotVy, robotOmega);
 
-    double initTurret = wrapAngle(atan2(goalY, goalX) * (180.0 / M_PI));
+    const double baseTurret = wrapAngle(atan2(goalY, goalX) * (180.0 / M_PI));
 
     double bestRPM = 0, bestHood = 0, bestTurret = 0, bestScore = 1e18;
 
     for (int restart = 0; restart < OPT_MAX_RESTARTS; restart++) {
-        double seedRPM, seedHood;
+        double seedRPM, seedHood, seedTurret;
 
         if (restart == 0) {
-            seedRPM  = rpm;
-            seedHood = hood;
+            seedRPM    = rpm;
+            seedHood   = hood;
+            seedTurret = baseTurret;
         } else {
-            seedRPM    = OPT_MIN_RPM  + ((double)rand() / RAND_MAX) * (OPT_MAX_RPM  - OPT_MIN_RPM);
-            seedHood   = OPT_MIN_HOOD + ((double)rand() / RAND_MAX) * (OPT_MAX_HOOD - OPT_MIN_HOOD);
-            initTurret = wrapAngle(initTurret + ((double)rand() / RAND_MAX) * 2.0 * OPT_TURRET_JITTER - OPT_TURRET_JITTER);
-            printf("Restart %d | rpm=%.0f hood=%.1f turret=%.1f\n",
-                   restart, seedRPM, seedHood, initTurret);
+            seedRPM    = OPT_MIN_RPM  + lcg_double(&randState) * (OPT_MAX_RPM  - OPT_MIN_RPM);
+            seedHood   = OPT_MIN_HOOD + lcg_double(&randState) * (OPT_MAX_HOOD - OPT_MIN_HOOD);
+            double jitter = lcg_double(&randState) * 2.0 * OPT_TURRET_JITTER - OPT_TURRET_JITTER;
+            seedTurret = wrapAngle(baseTurret + jitter);
         }
 
         double outRPM, outHood, outTurret;
-        double score = runOptimizer(seedRPM, seedHood, initTurret, goalPose, robot,
+        double score = runOptimizer(seedRPM, seedHood, seedTurret, goalPose, robot,
                                     &outRPM, &outHood, &outTurret);
 
-        printf("Restart %d done | score: %.4f\n", restart, score);
+        /* BUG FIX #4: Removed printf spam. 200 restarts * 2 printfs = 400 stdout
+         * writes per optimize() call — unacceptable on a robot during a match. */
 
         if (score < bestScore) {
             bestScore  = score;

@@ -4,12 +4,12 @@
 #include "structs.h"
 
 int main(void) {
-    double seedRPM = 4000;
-    double seedHood = 0;
-    double robotX = 1;
-    double robotY = 1;
+    double seedRPM = 1000;
+    double seedHood = 22;
+    double robotX = 0;
+    double robotY = 0;
     double robotOmega = 0;
-    double goalX = 15;
+    double goalX = 8;
     double goalY = 15;
     double goalZ = 2.0;
 
