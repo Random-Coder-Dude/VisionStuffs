@@ -29,7 +29,7 @@
 
 #define DIST_MIN     0.1
 #define DIST_MAX     15.0
-#define DIST_STEP    0.05
+#define DIST_STEP    0.5
 
 #define VX_MIN      -5.0
 #define VX_MAX       5.0
